@@ -1,0 +1,7 @@
+config.copy.json
+.env
+
+# VS Code settings and debug configurations
+.vscode/
+.venv/
+research_progress.txt

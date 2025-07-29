@@ -1,0 +1,26 @@
+# Core Azure AI and OpenAI packages
+azure-ai-projects>=1.0.0b12
+azure-ai-agents>=1.1.0b4  # Pre-release version needed for DeepResearchTool
+azure-identity>=1.23.1
+python-dotenv>=1.1.1
+openai>=1.0.0
+
+# LangChain for LangChain samples
+langchain-openai>=0.1.0
+
+# Data analysis and visualization (for Extraction notebook)
+pandas>=2.0.0
+matplotlib>=3.7.0
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Development and testing tools
+pytest>=8.0.0
+flake8>=7.0.0
+ruff>=0.12.0
+
+# Additional useful packages
+requests>=2.32.0
+numpy>=1.24.0
