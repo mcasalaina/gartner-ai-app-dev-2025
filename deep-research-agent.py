@@ -38,18 +38,15 @@ def fetch_and_print_new_agent_response(
     thread_id: str,
     agents_client: AgentsClient,
     last_message_id: Optional[str] = None,
-    progress_filename: str = "research_progress.txt",
 ) -> Optional[str]:
     """
-    Fetch the interim agent responses and citations from a thread and write them to a file.
+    Fetch the interim agent responses and citations from a thread and print them to the terminal.
     
     Args:
         thread_id (str): The ID of the thread to fetch messages from
         agents_client (AgentsClient): The Azure AI agents client instance
         last_message_id (Optional[str], optional): ID of the last processed message 
             to avoid duplicates. Defaults to None.
-        progress_filename (str, optional): Name of the file to write progress to. 
-            Defaults to "run_progress.txt".
             
     Returns:
         Optional[str]: The ID of the latest message if new content was found, 
@@ -66,75 +63,76 @@ def fetch_and_print_new_agent_response(
     if not any(t.text.value.startswith("cot_summary:") for t in response.text_messages):
         return last_message_id    
 
-    with open(progress_filename, "a", encoding="utf-8") as fp:
-        fp.write("\nAGENT>\n")
-        fp.write("\n".join(t.text.value.replace("cot_summary:", "Reasoning:") for t in response.text_messages))
-        fp.write("\n")
+    print("\nAGENT>")
+    print("\n".join(t.text.value.replace("cot_summary:", "Reasoning:") for t in response.text_messages))
+    print()
 
-        for ann in response.url_citation_annotations:
-            fp.write(f"Citation: [{ann.url_citation.title}]({ann.url_citation.url})\n")
+    for ann in response.url_citation_annotations:
+        print(f"Citation: [{ann.url_citation.title}]({ann.url_citation.url})")
 
     return response.id
 
 
 def create_research_summary(
         message : ThreadMessage,
-        filepath: str = "research_report.md"
 ) -> None:
     """
     Create a formatted research report from an agent's thread message with numbered citations 
-    and a references section.
+    and a references section, printed to the terminal.
     
     Args:
         message (ThreadMessage): The thread message containing the agent's research response
-        filepath (str, optional): Path where the research summary will be saved. 
-            Defaults to "research_report.md".
             
     Returns:
-        None: This function doesn't return a value, it writes to a file
+        None: This function doesn't return a value, it prints to the terminal
     """
     if not message:
         print("No message content provided, cannot create research report.")
         return
 
-    with open(filepath, "w", encoding="utf-8") as fp:
-        # Write text summary
-        text_summary = "\n\n".join([t.text.value.strip() for t in message.text_messages])
-        # Convert citations to superscript format
-        text_summary = convert_citations_to_superscript(text_summary)
-        fp.write(text_summary)
+    print("\n" + "="*80)
+    print("FINAL RESEARCH REPORT")
+    print("="*80)
 
-        # Write unique URL citations with numbered bullets, if present
-        if message.url_citation_annotations:
-            fp.write("\n\n## Citations\n")
-            seen_urls = set()
-            citation_dict = {}
+    # Print text summary
+    text_summary = "\n\n".join([t.text.value.strip() for t in message.text_messages])
+    # Convert citations to superscript format
+    text_summary = convert_citations_to_superscript(text_summary)
+    print(text_summary)
+
+    # Print unique URL citations with numbered bullets, if present
+    if message.url_citation_annotations:
+        print("\n\n## Citations")
+        seen_urls = set()
+        citation_dict = {}
+        
+        for ann in message.url_citation_annotations:
+            url = ann.url_citation.url
+            title = ann.url_citation.title or url
             
-            for ann in message.url_citation_annotations:
-                url = ann.url_citation.url
-                title = ann.url_citation.title or url
+            if url not in seen_urls:
+                # Extract citation number from annotation text like "【58:1†...】"
+                citation_number = None
+                if ann.text and ":" in ann.text:
+                    match = re.search(r'【\d+:(\d+)', ann.text)
+                    if match:
+                        citation_number = int(match.group(1))
                 
-                if url not in seen_urls:
-                    # Extract citation number from annotation text like "【58:1†...】"
-                    citation_number = None
-                    if ann.text and ":" in ann.text:
-                        match = re.search(r'【\d+:(\d+)', ann.text)
-                        if match:
-                            citation_number = int(match.group(1))
-                    
-                    if citation_number is not None:
-                        citation_dict[citation_number] = f"[{title}]({url})"
-                    else:
-                        # Fallback for citations without proper format
-                        citation_dict[len(citation_dict) + 1] = f"[{title}]({url})"
-                    
-                    seen_urls.add(url)
-            
-            # Write citations in numbered order
-            for num in sorted(citation_dict.keys()):
-                fp.write(f"{num}. {citation_dict[num]}\n")
+                if citation_number is not None:
+                    citation_dict[citation_number] = f"[{title}]({url})"
+                else:
+                    # Fallback for citations without proper format
+                    citation_dict[len(citation_dict) + 1] = f"[{title}]({url})"
+                
+                seen_urls.add(url)
+        
+        # Print citations in numbered order
+        for num in sorted(citation_dict.keys()):
+            print(f"{num}. {citation_dict[num]}")
 
-    print(f"Research report written to '{filepath}'.")
+    print("="*80)
+    print("Research report completed.")
+    print("="*80)
 
 
 if __name__ == "__main__":
@@ -162,9 +160,10 @@ if __name__ == "__main__":
             # NOTE: To add Deep Research to an existing agent, fetch it with `get_agent(agent_id)` and then,
             # update the agent with the Deep Research tool.
             agent = agents_client.create_agent(
+                # This model runs the actual agent, and it calls the Deep Research model as a tool
                 model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
-                name="my-agent",
-                instructions="You are a helpful Agent that assists in researching scientific topics.",
+                name="restaurant-researcher",
+                instructions="You are a helpful agent that assists in doing research for restaurants and other businesses.",
                 tools=deep_research_tool.definitions,
             )
 
@@ -175,46 +174,63 @@ if __name__ == "__main__":
             thread = agents_client.threads.create()
             print(f"Created thread, ID: {thread.id}")
 
-            # Create message to thread
-            message = agents_client.messages.create(
-                thread_id=thread.id,
-                role="user",
-                content=(
-                    "Research the current state of studies on orca intelligence and orca language, including what is currently known about orcas' cognitive capabilities and communication systems."
-                ),
-            )
-            print(f"Created message, ID: {message.id}")
+            # Interactive conversation loop
+            while True:
+                # Get user input for the message
+                if 'message' not in locals():
+                    # First message
+                    user_content = "I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant."
+                else:
+                    # Subsequent messages
+                    print("\n" + "-"*80)
+                    print("Would you like to continue the conversation?")
+                    print("Enter your message (or 'quit' to exit):")
+                    user_content = input("> ").strip()
+                    
+                    if user_content.lower() in ['quit', 'exit', 'q']:
+                        break
+                    
+                    if not user_content:
+                        print("Empty message. Please enter a message or 'quit' to exit.")
+                        continue
 
-            print(f"Start processing the message... this may take a few minutes to finish. Be patient!")
-            # Poll the run as long as run status is queued or in progress
-            run = agents_client.runs.create(thread_id=thread.id, agent_id=agent.id)
-            last_message_id = None
-            while run.status in ("queued", "in_progress"):
-                time.sleep(1)
-                run = agents_client.runs.get(thread_id=thread.id, run_id=run.id)
-
-                last_message_id = fetch_and_print_new_agent_response(
+                # Create message to thread
+                message = agents_client.messages.create(
                     thread_id=thread.id,
-                    agents_client=agents_client,
-                    last_message_id=last_message_id,
-                    progress_filename="research_progress.txt",
+                    role="user",
+                    content=user_content,
                 )
-                print(f"Run status: {run.status}")
 
-            # Once the run is finished, print the final status and ID
-            print(f"Run finished with status: {run.status}, ID: {run.id}")
+                print(f"Processing the message... This may take a few minutes to finish. Be patient!")
+                # Poll the run as long as run status is queued or in progress
+                run = agents_client.runs.create(thread_id=thread.id, agent_id=agent.id)
+                last_message_id = None
+                while run.status in ("queued", "in_progress"):
+                    time.sleep(1)
+                    run = agents_client.runs.get(thread_id=thread.id, run_id=run.id)
 
-            if run.status == "failed":
-                print(f"Run failed: {run.last_error}")
+                    last_message_id = fetch_and_print_new_agent_response(
+                        thread_id=thread.id,
+                        agents_client=agents_client,
+                        last_message_id=last_message_id,
+                    )
+                    print(f"Run status: {run.status}")
 
-            # Fetch the final message from the agent in the thread and create a research summary
-            final_message = agents_client.messages.get_last_message_by_role(
-                thread_id=thread.id, role=MessageRole.AGENT
-            )
-            if final_message:
-                create_research_summary(final_message)
+                # Once the run is finished, print the final status and ID
+                print(f"Run finished with status: {run.status}, ID: {run.id}")
 
-            # Clean-up and delete the agent once the run is finished.
+                if run.status == "failed":
+                    print(f"Run failed: {run.last_error}")
+                    continue  # Allow user to try again
+
+                # Fetch the final message from the agent in the thread and create a research summary
+                final_message = agents_client.messages.get_last_message_by_role(
+                    thread_id=thread.id, role=MessageRole.AGENT
+                )
+                if final_message:
+                    create_research_summary(final_message)
+
+            # Clean-up and delete the agent once the conversation is finished.
             # NOTE: Comment out this line if you plan to reuse the agent later.
             agents_client.delete_agent(agent.id)
-            print("Deleted agent")
+            print("Conversation ended. Deleted agent.")
