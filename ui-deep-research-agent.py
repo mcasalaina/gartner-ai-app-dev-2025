@@ -276,24 +276,9 @@ class DeepResearchAgentUI:
         input_frame.columnconfigure(0, weight=1)
         input_frame.rowconfigure(0, weight=1)
         
-        # Updated default prompt
-        placeholder = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
-        self.input_text.insert(1.0, placeholder)
-        self.input_text.configure(fg='gray')
-        
-        # Placeholder text handling
-        def on_focus_in(event):
-            if self.input_text.get(1.0, tk.END).strip() == placeholder.strip():
-                self.input_text.delete(1.0, tk.END)
-                self.input_text.configure(fg='black')
-        
-        def on_focus_out(event):
-            if not self.input_text.get(1.0, tk.END).strip():
-                self.input_text.insert(1.0, placeholder)
-                self.input_text.configure(fg='gray')
-        
-        self.input_text.bind('<FocusIn>', on_focus_in)
-        self.input_text.bind('<FocusOut>', on_focus_out)
+        # Default text content
+        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
+        self.input_text.insert(1.0, default_text)
     
     def create_reasoning_section(self, parent):
         """Create the reasoning section"""
@@ -412,9 +397,8 @@ class DeepResearchAgentUI:
         
         # Get user input
         user_input = self.input_text.get(1.0, tk.END).strip()
-        placeholder = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
         
-        if not user_input or user_input == placeholder.strip():
+        if not user_input:
             messagebox.showwarning("Input Required", "Please enter a research query.")
             return
         
@@ -657,12 +641,10 @@ class DeepResearchAgentUI:
         self.report_text.delete(1.0, tk.END)
         self.report_text.configure(state='disabled')
         
-        # Reset input (restore placeholder if empty)
-        if self.input_text.get(1.0, tk.END).strip():
-            placeholder = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
-            self.input_text.delete(1.0, tk.END)
-            self.input_text.insert(1.0, placeholder)
-            self.input_text.configure(fg='gray')
+        # Reset input to default text
+        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
+        self.input_text.delete(1.0, tk.END)
+        self.input_text.insert(1.0, default_text)
     
     def clear_outputs(self):
         """Clear only the output areas"""
