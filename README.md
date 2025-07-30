@@ -1,4 +1,4 @@
-# Gartner AI App Development Magic Quadrant 2025 Companion Repo
+# Microsoft's Gartner AI App Development Magic Quadrant 2025 Companion Repo
 
 This repository serves as a companion to Microsoft's submission for the Gartner AI App Development Magic Quadrant 2025.
 
@@ -20,7 +20,7 @@ Then edit the `.env` file with the following required variables:
 # Azure AI Project Configuration
 
 # Azure AI Project endpoint URL
-PROJECT_ENDPOINT=https://your-project-endpoint.cognitiveservices.azure.com/
+PROJECT_ENDPOINT=https://your-project-endpoint.services.ai.azure.com/api/projects/your-project-name
 
 # Azure subscription information
 AZURE_SUBSCRIPTION_ID=your-azure-subscription-id
