@@ -205,6 +205,9 @@ class DeepResearchAgentUI:
         style = ttk.Style()
         style.theme_use('clam')
         
+        # Configure Frame background to match window background
+        style.configure('TFrame', background='#f0f0f0')
+        
         # Configure button styles
         style.configure('Action.TButton', 
                        font=('Segoe UI', 10, 'bold'),
