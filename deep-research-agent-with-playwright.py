@@ -188,7 +188,7 @@ When conducting research:
   * Access content that might be behind forms or interactions
   * Verify information by directly viewing the source
 
-Always explain which tool you're using and why it's appropriate for the specific research task.""",
+Always explain which tool you're using and why it's appropriate for the specific research task. You output your results in Markdown without embedded images.""",
                 tools=deep_research_tool.definitions + playwright_mcp_tool.definitions,
             )
 
