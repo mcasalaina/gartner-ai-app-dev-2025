@@ -24,3 +24,6 @@ ruff>=0.12.0
 # Additional useful packages
 requests>=2.32.0
 numpy>=1.24.0
+
+# GUI dependencies
+markdown>=3.4.0
