@@ -10,7 +10,6 @@ from typing import Optional
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from tkinter import font
-from tkhtmlview import HTMLScrolledText
 from dotenv import load_dotenv
 from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
@@ -122,6 +121,253 @@ class ImageGenerationTool:
                 "status": "error",
                 "message": f"Unknown function: {function_name}"
             }
+
+
+class HTMLRenderer:
+    """HTML renderer for tkinter Text widgets"""
+    
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+        self.setup_tags()
+    
+    def setup_tags(self):
+        """Configure text tags for different HTML elements"""
+        # Get default font
+        default_font = font.nametofont("TkDefaultFont")
+        default_size = default_font.cget("size")
+        default_family = default_font.cget("family")
+        
+        # Headers
+        self.text_widget.tag_config("h1", font=(default_family, 18, "bold"), spacing3=10)
+        self.text_widget.tag_config("h2", font=(default_family, 16, "bold"), spacing3=8)
+        self.text_widget.tag_config("h3", font=(default_family, 14, "bold"), spacing3=6)
+        
+        # Text formatting
+        self.text_widget.tag_config("bold", font=(default_family, default_size, "bold"))
+        self.text_widget.tag_config("italic", font=(default_family, default_size, "italic"))
+        self.text_widget.tag_config("code", font=("Courier", default_size), background="#f0f0f0")
+        
+        # Links
+        self.text_widget.tag_config("link", foreground="blue", underline=True)
+        self.text_widget.tag_bind("link", "<Button-1>", self.open_link)
+        self.text_widget.tag_bind("link", "<Enter>", lambda e: self.text_widget.config(cursor="hand2"))
+        self.text_widget.tag_bind("link", "<Leave>", lambda e: self.text_widget.config(cursor=""))
+        
+        # Citations (superscript)
+        self.text_widget.tag_config("citation", font=(default_family, int(default_size * 0.8)), offset=4)
+        
+        # Lists
+        self.text_widget.tag_config("list_item", lmargin1=20, lmargin2=20)
+        
+        # Images (placeholder text)
+        self.text_widget.tag_config("image", background="#e8f4f8", relief="solid", borderwidth=1)
+    
+    def open_link(self, event):
+        """Handle link clicks"""
+        import webbrowser
+        # Get the URL from the tag
+        tags = self.text_widget.tag_names(tk.CURRENT)
+        for tag in tags:
+            if tag.startswith("url:"):
+                url = tag[4:]  # Remove "url:" prefix
+                webbrowser.open(url)
+                break
+    
+    def render_html(self, html_text):
+        """Render HTML text to the text widget"""
+        self.text_widget.delete(1.0, tk.END)
+        
+        # Simple HTML parsing
+        lines = html_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Headers
+            if line.startswith('<h3>') and line.endswith('</h3>'):
+                content = line[4:-5]
+                self.insert_with_tag(content + '\n', "h3")
+            elif line.startswith('<h2>') and line.endswith('</h2>'):
+                content = line[4:-5]
+                self.insert_with_tag(content + '\n', "h2")
+            elif line.startswith('<h1>') and line.endswith('</h1>'):
+                content = line[4:-5]
+                self.insert_with_tag(content + '\n', "h1")
+            
+            # Images
+            elif '<img' in line:
+                # Extract image info
+                img_match = re.search(r'<img[^>]*src=["\']([^"\']*)["\'][^>]*alt=["\']([^"\']*)["\'][^>]*>', line)
+                if img_match:
+                    src, alt = img_match.groups()
+                    image_text = f"🖼️ Image: {alt}\n   File: {src}\n"
+                    self.insert_with_tag(image_text, "image")
+                else:
+                    # Simpler image tag
+                    img_match = re.search(r'<img[^>]*src=["\']([^"\']*)["\'][^>]*>', line)
+                    if img_match:
+                        src = img_match.group(1)
+                        image_text = f"🖼️ Image: {src}\n"
+                        self.insert_with_tag(image_text, "image")
+            
+            # List items
+            elif line.startswith('<li>') and line.endswith('</li>'):
+                content = line[4:-5]
+                self.process_formatted_line("• " + content + '\n', "list_item")
+            elif line.startswith('- ') or re.match(r'^\d+\.\s', line):
+                self.process_formatted_line(line + '\n', "list_item")
+            
+            # Paragraphs
+            elif line.startswith('<p>') and line.endswith('</p>'):
+                content = line[3:-4]
+                self.process_formatted_line(content + '\n')
+            
+            # Regular paragraphs (with inline formatting)
+            elif line.strip() and not any(line.startswith(tag) for tag in ['<h', '<ul', '<ol', '</ul', '</ol', '<div', '</div']):
+                self.process_formatted_line(line + '\n')
+            
+            # Empty lines and ignored tags
+            elif not line.strip() or line in ['<ul>', '</ul>', '<ol>', '</ol>', '<div>', '</div>']:
+                if not line.strip():
+                    self.text_widget.insert(tk.END, '\n')
+    
+    def process_formatted_line(self, line, base_tag=None):
+        """Process a line with inline formatting"""
+        # Handle citations (superscript HTML tags)
+        line = re.sub(r'<sup>(\d+)</sup>', r'[\1]', line)
+        
+        # Handle links in HTML format <a href="url">text</a>
+        def replace_html_link(match):
+            url, text = match.groups()
+            start_pos = self.text_widget.index(tk.END)
+            self.text_widget.insert(tk.END, text)
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add("link", start_pos, end_pos)
+            self.text_widget.tag_add(f"url:{url}", start_pos, end_pos)
+            return ""
+        
+        # Handle markdown-style links [text](url)
+        def replace_md_link(match):
+            text, url = match.groups()
+            start_pos = self.text_widget.index(tk.END)
+            self.text_widget.insert(tk.END, text)
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add("link", start_pos, end_pos)
+            self.text_widget.tag_add(f"url:{url}", start_pos, end_pos)
+            return ""
+        
+        # Process HTML links
+        html_link_pattern = r'<a href=["\']([^"\']*)["\'][^>]*>([^<]*)</a>'
+        md_link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+        
+        current_pos = 0
+        
+        # Process HTML links first
+        for match in re.finditer(html_link_pattern, line):
+            # Add text before the link
+            before_text = line[current_pos:match.start()]
+            if before_text:
+                self.insert_with_formatting(before_text, base_tag)
+            
+            # Add the link
+            url, text = match.groups()
+            start_pos = self.text_widget.index(tk.END)
+            self.text_widget.insert(tk.END, text)
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add("link", start_pos, end_pos)
+            self.text_widget.tag_add(f"url:{url}", start_pos, end_pos)
+            if base_tag:
+                self.text_widget.tag_add(base_tag, start_pos, end_pos)
+            
+            current_pos = match.end()
+        
+        # Process remaining text for markdown links
+        remaining_text = line[current_pos:]
+        current_pos = 0
+        
+        for match in re.finditer(md_link_pattern, remaining_text):
+            # Add text before the link
+            before_text = remaining_text[current_pos:match.start()]
+            if before_text:
+                self.insert_with_formatting(before_text, base_tag)
+            
+            # Add the link
+            text, url = match.groups()
+            start_pos = self.text_widget.index(tk.END)
+            self.text_widget.insert(tk.END, text)
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add("link", start_pos, end_pos)
+            self.text_widget.tag_add(f"url:{url}", start_pos, end_pos)
+            if base_tag:
+                self.text_widget.tag_add(base_tag, start_pos, end_pos)
+            
+            current_pos = match.end()
+        
+        # Add final remaining text
+        final_text = remaining_text[current_pos:]
+        if final_text:
+            self.insert_with_formatting(final_text, base_tag)
+    
+    def insert_with_formatting(self, text, base_tag=None):
+        """Insert text with bold/italic formatting"""
+        # Handle HTML bold <b></b> and <strong></strong>
+        bold_html_pattern = r'<(b|strong)>(.*?)</(b|strong)>'
+        # Handle HTML italic <i></i> and <em></em>
+        italic_html_pattern = r'<(i|em)>(.*?)</(i|em)>'
+        # Handle markdown bold **text**
+        bold_md_pattern = r'\*\*(.*?)\*\*'
+        # Handle markdown italic *text*
+        italic_md_pattern = r'\*(.*?)\*'
+        
+        current_pos = 0
+        
+        # Process all formatting patterns
+        all_patterns = [
+            (bold_html_pattern, "bold"),
+            (italic_html_pattern, "italic"),
+            (bold_md_pattern, "bold"),
+            (italic_md_pattern, "italic")
+        ]
+        
+        # Find all matches
+        matches = []
+        for pattern, tag in all_patterns:
+            for match in re.finditer(pattern, text):
+                content = match.group(2) if tag in ["bold", "italic"] and match.groups() else match.group(1)
+                matches.append((match.start(), match.end(), content, tag))
+        
+        # Sort matches by position
+        matches.sort(key=lambda x: x[0])
+        
+        # Process matches
+        for start, end, content, tag in matches:
+            # Add text before formatting
+            before_text = text[current_pos:start]
+            if before_text:
+                self.insert_with_tag(before_text, base_tag)
+            
+            # Add formatted text
+            start_pos = self.text_widget.index(tk.END)
+            self.text_widget.insert(tk.END, content)
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add(tag, start_pos, end_pos)
+            if base_tag:
+                self.text_widget.tag_add(base_tag, start_pos, end_pos)
+            
+            current_pos = end
+        
+        # Add remaining text
+        remaining_text = text[current_pos:]
+        if remaining_text:
+            self.insert_with_tag(remaining_text, base_tag)
+    
+    def insert_with_tag(self, text, tag=None):
+        """Insert text with optional tag"""
+        start_pos = self.text_widget.index(tk.END)
+        self.text_widget.insert(tk.END, text)
+        if tag:
+            end_pos = self.text_widget.index(tk.END)
+            self.text_widget.tag_add(tag, start_pos, end_pos)
 
 
 class DeepResearchAgentUI:
@@ -274,18 +520,15 @@ class DeepResearchAgentUI:
         self.report_frame = tk.Frame(parent, bg='white', relief='solid', bd=1)
         self.report_frame.grid(row=1, column=1, sticky='nsew', pady=(0, 15))
         
-        # Report text area using HTMLScrolledText for proper HTML rendering
-        self.report_text = HTMLScrolledText(
-            self.report_frame, 
-            html="<p>Research report will appear here...</p>",
-            height=20,
-            width=80,
-            wrap=tk.WORD,
-            relief='flat',
-            padx=15,
-            pady=15
+        # Report text area
+        self.report_text = scrolledtext.ScrolledText(
+            self.report_frame, font=('Segoe UI', 11), wrap=tk.WORD,
+            relief='flat', padx=15, pady=15, state='disabled'
         )
-        self.report_text.pack(fill='both', expand=True, padx=10, pady=10)
+        self.report_text.pack(fill='both', expand=True)
+        
+        # Initialize HTML renderer for report
+        self.report_renderer = HTMLRenderer(self.report_text)
         
         # Loading overlay (initially hidden)
         self.loading_overlay = tk.Frame(self.report_frame, bg='white')
@@ -629,7 +872,9 @@ Create a comprehensive, visually enhanced research report using HTML format with
     def update_report(self, html_text):
         """Update the research report panel with HTML rendering (thread-safe)"""
         def _update():
-            self.report_text.set_html(html_text)
+            self.report_text.configure(state='normal')
+            self.report_renderer.render_html(html_text)
+            self.report_text.configure(state='disabled')
         
         self.root.after(0, _update)
     
@@ -664,7 +909,9 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.reasoning_text.configure(state='disabled')
         
         # Clear report panel
-        self.report_text.set_html("<p>Research report will appear here...</p>")
+        self.report_text.configure(state='normal')
+        self.report_text.delete(1.0, tk.END)
+        self.report_text.configure(state='disabled')
         
         # Reset input to default text
         default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
@@ -679,24 +926,19 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.reasoning_text.configure(state='disabled')
         
         # Clear report panel
-        self.report_text.set_html("<p>Research report will appear here...</p>")
+        self.report_text.configure(state='normal')
+        self.report_text.delete(1.0, tk.END)
+        self.report_text.configure(state='disabled')
     
     def copy_report(self):
         """Copy the research report to clipboard"""
-        # Get the HTML content from the HTMLScrolledText widget
-        try:
-            # HTMLScrolledText may not have a direct method to get HTML, so we'll get the text content
-            # This is a limitation - we'll copy the visible text content
-            html_content = self.report_text.get("1.0", tk.END).strip()
-            if html_content and html_content != "Research report will appear here...":
-                self.root.clipboard_clear()
-                self.root.clipboard_append(html_content)
-                messagebox.showinfo("Copied", "Research report copied to clipboard!")
-            else:
-                messagebox.showwarning("No Content", "No research report to copy.")
-        except Exception as e:
-            # Fallback: copy a placeholder message
-            messagebox.showwarning("Copy Error", f"Could not copy report: {str(e)}")
+        report_content = self.report_text.get(1.0, tk.END).strip()
+        if report_content:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(report_content)
+            messagebox.showinfo("Copied", "Research report copied to clipboard!")
+        else:
+            messagebox.showwarning("No Content", "No research report to copy.")
 
 
 def main():
