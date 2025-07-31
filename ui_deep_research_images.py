@@ -278,7 +278,7 @@ class DeepResearchAgentUI:
         input_frame.rowconfigure(0, weight=1)
         
         # Default text content
-        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
+        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Design a menu that offers a combination of steaks, american-style appetizers, chinese-inspired dishes, and fancy jello salads, and make some images of the foods and of the menu.")
         self.input_text.insert(1.0, default_text)
     
     def create_reasoning_section(self, parent):
@@ -704,9 +704,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.report_text.set_html("<p>Research report will appear here...</p>")
         
         # Reset input to default text
-        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Design a menu that offers a combination of steaks, american-style appetizers, chinese-inspired dishes, and fancy jello salads, and make some images of the foods and of the menu.")
         self.input_text.delete(1.0, tk.END)
-        self.input_text.insert(1.0, default_text)
     
     def clear_outputs(self):
         """Clear only the output areas"""
