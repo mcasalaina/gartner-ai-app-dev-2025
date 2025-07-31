@@ -5,6 +5,7 @@ import threading
 import base64
 import uuid
 import json
+import requests
 from datetime import datetime
 from typing import Optional
 import tkinter as tk
@@ -25,16 +26,29 @@ class ImageGenerator:
     """Image generation tool using Azure OpenAI GPT-Image-1"""
     
     def __init__(self):
-        # Create a function that returns tokens for the Azure AD token provider
-        def get_azure_ad_token():
-            token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default")
-            return token.token
+        # Check if IMAGE_KEY is available for API key authentication
+        self.image_key = os.environ.get("IMAGE_KEY")
         
-        self.client = AzureOpenAI(
-            api_version=os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview"),
-            azure_endpoint=os.environ["IMAGE_PROJECT_ENDPOINT"],
-            azure_ad_token_provider=get_azure_ad_token
-        )
+        if self.image_key:
+            # Use API key authentication
+            self.token = self.image_key
+            self.client = AzureOpenAI(
+                api_key=self.image_key,
+                api_version=os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview"),
+                azure_endpoint=os.environ["IMAGE_PROJECT_ENDPOINT"]
+            )
+        else:
+            # Use Azure AD token authentication
+            def get_azure_ad_token():
+                token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default")
+                return token.token
+
+            self.token = get_azure_ad_token()
+            self.client = AzureOpenAI(
+                api_version=os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview"),
+                azure_endpoint=os.environ["IMAGE_PROJECT_ENDPOINT"],
+                azure_ad_token_provider=get_azure_ad_token
+            )
         
         # Ensure images directory exists
         self.images_dir = "./images"
@@ -49,19 +63,38 @@ class ImageGenerator:
             filename = f"generated_image_{timestamp}_{unique_id}.png"
             filepath = os.path.join(self.images_dir, filename)
 
+            api_version=os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview"),
+            azure_endpoint=os.environ["IMAGE_PROJECT_ENDPOINT"]
             model = os.environ["IMAGE_MODEL"]
 
-            print(f"Generating image using {model} with prompt: {prompt}")
-            
-            # Generate image using Azure OpenAI
-            response = self.client.images.generate(
-                model=model,
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard",
-                n=1,
-                response_format="b64_json"
-            )
+            base_path = f'openai/deployments/{model}/images'
+            params = f'?api-version={api_version}'
+
+            generation_url = f"{azure_endpoint}{base_path}/generations{params}"
+            generation_body = {
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+            "quality": "medium",
+            "output_format": "png"
+            }
+
+            # Prepare authentication header
+            if self.image_key:
+                # Use API key authentication
+                auth_header = {'api-key': self.image_key}
+            else:
+                # Use Bearer token authentication
+                auth_header = {'Authorization': 'Bearer ' + self.token}
+
+            response = requests.post(
+            generation_url,
+            headers={
+                **auth_header,
+                'Content-Type': 'application/json',
+            },
+            json=generation_body
+            ).json()
             
             # Save the image
             if response.data and len(response.data) > 0 and response.data[0].b64_json:
@@ -914,7 +947,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.report_text.configure(state='disabled')
         
         # Reset input to default text
-        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
+        default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Design a menu that offers a combination of steaks, american-style appetizers, chinese-inspired dishes, and fancy jello salads, and make some images of the foods and of the menu.")
         self.input_text.delete(1.0, tk.END)
         self.input_text.insert(1.0, default_text)
     
