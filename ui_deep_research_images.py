@@ -64,20 +64,24 @@ class ImageGenerator:
             filename = f"generated_image_{timestamp}_{unique_id}.png"
             filepath = os.path.join(self.images_dir, filename)
 
-            api_version=os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview"),
-            azure_endpoint=os.environ["IMAGE_PROJECT_ENDPOINT"]
+            api_version = os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview")
+            azure_endpoint = os.environ["IMAGE_PROJECT_ENDPOINT"]
             model = os.environ["IMAGE_MODEL"]
+
+            # Ensure endpoint ends with /
+            if not azure_endpoint.endswith('/'):
+                azure_endpoint += '/'
 
             base_path = f'openai/deployments/{model}/images'
             params = f'?api-version={api_version}'
 
             generation_url = f"{azure_endpoint}{base_path}/generations{params}"
             generation_body = {
-            "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024",
-            "quality": "medium",
-            "output_format": "png"
+                "prompt": prompt,
+                "n": 1,
+                "size": "1024x1024",
+                "quality": "medium",
+                "output_format": "png"
             }
 
             # Prepare authentication header
@@ -89,12 +93,12 @@ class ImageGenerator:
                 auth_header = {'Authorization': 'Bearer ' + self.token}
 
             response = requests.post(
-            generation_url,
-            headers={
-                **auth_header,
-                'Content-Type': 'application/json',
-            },
-            json=generation_body
+                generation_url,
+                headers={
+                    **auth_header,
+                    'Content-Type': 'application/json',
+                },
+                json=generation_body
             ).json()
             
             # Save the image
