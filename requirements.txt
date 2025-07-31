@@ -27,6 +27,7 @@ numpy>=1.24.0
 
 # GUI dependencies
 markdown>=3.4.0
+tkhtmlview>=0.3.0
 
 # For Playwright MCP integration (MCP tool support should be in azure-ai-agents)
 # Note: Playwright MCP server runs as separate Node.js process
