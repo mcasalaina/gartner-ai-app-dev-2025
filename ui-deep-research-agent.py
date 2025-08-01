@@ -191,6 +191,8 @@ class DeepResearchAgentUI:
         self.agents_client = None
         self.thread = None
         self.current_run = None
+        self.project_client = None
+        self.agents_client_context = None
         
         # Create UI elements
         self.create_widgets()
@@ -393,6 +395,11 @@ class DeepResearchAgentUI:
                 deep_research_model=os.environ["DEEP_RESEARCH_MODEL_DEPLOYMENT_NAME"],
             )
             
+            # Initialize the agents client context
+            self.project_client.__enter__()
+            self.agents_client_context = self.project_client.agents
+            self.agents_client = self.agents_client_context.__enter__()
+            
             # Update status
             self.update_reasoning("✅ Azure AI clients initialized successfully.\n")
             
@@ -418,8 +425,15 @@ class DeepResearchAgentUI:
         self.show_loading()
         self.update_button_states()
         
-        # Clear previous results
-        self.clear_outputs()
+        # Clear previous results only from report panel
+        self.report_text.configure(state='normal')
+        self.report_text.delete(1.0, tk.END)
+        self.report_text.configure(state='disabled')
+        
+        # Add separator to reasoning if this is not the first research
+        if self.thread:
+            self.update_reasoning("\n" + "="*50 + "\n")
+            self.update_reasoning("🔄 Starting new research request...\n\n")
         
         research_thread = threading.Thread(target=self.run_research, args=(user_input,))
         research_thread.daemon = True
@@ -428,75 +442,76 @@ class DeepResearchAgentUI:
     def run_research(self, user_input):
         """Run the research process (called in background thread)"""
         try:
-            with self.project_client:
-                with self.project_client.agents as agents_client:
-                    self.agents_client = agents_client
-                    
-                    # Create agent
-                    self.update_reasoning("🤖 Creating research agent...\n")
-                    self.agent = agents_client.create_agent(
-                        model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
-                        name="deep-research-agent-ui",
-                        instructions="You are a helpful agent that assists in doing comprehensive research.",
-                        tools=self.deep_research_tool.definitions,
-                    )
-                    
-                    # Create thread
-                    self.update_reasoning("📝 Creating conversation thread...\n")
-                    self.thread = agents_client.threads.create()
-                    
-                    # Create message
-                    self.update_reasoning("💬 Sending research request...\n")
-                    message = agents_client.messages.create(
-                        thread_id=self.thread.id,
-                        role="user",
-                        content=user_input,
-                    )
-                    
-                    # Start run
-                    self.update_reasoning("🔍 Starting research process...\n\n")
-                    run = agents_client.runs.create(
-                        thread_id=self.thread.id, 
-                        agent_id=self.agent.id
-                    )
-                    
-                    self.current_run = run
-                    last_message_id = None
-                    
-                    # Poll for progress
-                    while run.status in ("queued", "in_progress") and self.is_processing:
-                        time.sleep(2)
-                        run = agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)
-                        
-                        # Fetch and display intermediate responses
-                        last_message_id = self.fetch_and_display_progress(
-                            self.thread.id, agents_client, last_message_id
-                        )
-                    
-                    # Handle completion or cancellation
-                    if not self.is_processing:
-                        self.update_reasoning("\n⏹️ Research stopped by user.\n")
-                        return
-                    
-                    if run.status == "failed":
-                        error_msg = f"❌ Research failed: {run.last_error}"
-                        self.update_reasoning(f"\n{error_msg}\n")
-                        self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
-                        return
-                    
-                    # Get final results
-                    self.update_reasoning("\n✅ Research completed! Generating final report...\n")
-                    final_message = agents_client.messages.get_last_message_by_role(
-                        thread_id=self.thread.id, role=MessageRole.AGENT
-                    )
-                    
-                    if final_message:
-                        self.display_final_results(final_message)
-                    
-                    # Cleanup
-                    if self.agent:
-                        agents_client.delete_agent(self.agent.id)
-                        self.update_reasoning("🧹 Cleanup completed.\n")
+            # Check if clients are initialized
+            if not self.agents_client:
+                raise Exception("Azure clients not initialized")
+            
+            # Create agent if it doesn't exist
+            if not self.agent:
+                self.update_reasoning("🤖 Creating research agent...\n")
+                self.agent = self.agents_client.create_agent(
+                    model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
+                    name="deep-research-agent-ui",
+                    instructions="You are a helpful agent that assists in doing comprehensive research.",
+                    tools=self.deep_research_tool.definitions,
+                )
+            else:
+                self.update_reasoning("🤖 Reusing existing research agent...\n")
+            
+            # Create thread if it doesn't exist
+            if not self.thread:
+                self.update_reasoning("📝 Creating conversation thread...\n")
+                self.thread = self.agents_client.threads.create()
+            else:
+                self.update_reasoning("📝 Adding to existing conversation thread...\n")
+            
+            # Create message
+            self.update_reasoning("💬 Sending research request...\n")
+            message = self.agents_client.messages.create(
+                thread_id=self.thread.id,
+                role="user",
+                content=user_input,
+            )
+            
+            # Start run
+            self.update_reasoning("🔍 Starting research process...\n\n")
+            run = self.agents_client.runs.create(
+                thread_id=self.thread.id, 
+                agent_id=self.agent.id
+            )
+            
+            self.current_run = run
+            last_message_id = None
+            
+            # Poll for progress
+            while run.status in ("queued", "in_progress") and self.is_processing:
+                time.sleep(2)
+                run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)
+                
+                # Fetch and display intermediate responses
+                last_message_id = self.fetch_and_display_progress(
+                    self.thread.id, self.agents_client, last_message_id
+                )
+            
+            # Handle completion or cancellation
+            if not self.is_processing:
+                self.update_reasoning("\n⏹️ Research stopped by user.\n")
+                return
+            
+            if run.status == "failed":
+                error_msg = f"❌ Research failed: {run.last_error}"
+                self.update_reasoning(f"\n{error_msg}\n")
+                self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
+                return
+            
+            # Get final results
+            self.update_reasoning("\n✅ Research completed! Generating final report...\n")
+            final_message = self.agents_client.messages.get_last_message_by_role(
+                thread_id=self.thread.id, role=MessageRole.AGENT
+            )
+            
+            if final_message:
+                self.display_final_results(final_message)
                     
         except Exception as e:
             error_msg = f"❌ Research error: {str(e)}"
@@ -656,6 +671,9 @@ class DeepResearchAgentUI:
         default_text = ("I have rented a new storefront at 340 Jefferson St. in Fisherman's Wharf in San Francisco to open a new outpost of my restaurant chain, Scheibmeir's Steaks, Snacks and Sticks. Please help me design a strategy and theme to operate the new restaurant, including but not limited to the cuisine and menu to offer, staff recruitment requirements including salary, and marketing and promotional strategies. Provide one best option rather than multiple choices. Based on the option help me also generate a FAQ document for the customer to understand the details of the restaurant.")
         self.input_text.delete(1.0, tk.END)
         self.input_text.insert(1.0, default_text)
+        
+        # Re-initialize Azure clients status message
+        self.update_reasoning("✅ Azure AI clients ready for new research.\n")
     
     def clear_outputs(self):
         """Clear only the output areas"""
@@ -668,6 +686,9 @@ class DeepResearchAgentUI:
         self.report_text.configure(state='normal')
         self.report_text.delete(1.0, tk.END)
         self.report_text.configure(state='disabled')
+        
+        # Add status message to reasoning panel
+        self.update_reasoning("📝 Ready for new research request...\n")
     
     def copy_report(self):
         """Copy the research report to clipboard"""
@@ -869,6 +890,25 @@ class DeepResearchAgentUI:
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
     
+    def cleanup_azure_resources(self):
+        """Clean up Azure resources when application closes"""
+        try:
+            if self.agent and self.agents_client:
+                self.agents_client.delete_agent(self.agent.id)
+                self.agent = None
+            
+            if self.agents_client_context:
+                self.agents_client_context.__exit__(None, None, None)
+                self.agents_client_context = None
+                self.agents_client = None
+            
+            if self.project_client:
+                self.project_client.__exit__(None, None, None)
+                self.project_client = None
+                
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+    
     def clean_markdown_for_pdf(self, text):
         """Clean markdown formatting for PDF rendering"""
         # Convert markdown links [text](url) to just text with URL in parentheses
@@ -927,8 +967,10 @@ def main():
             if messagebox.askokcancel("Quit", "Research is in progress. Stop and quit?"):
                 app.stop_research()
                 time.sleep(1)  # Give time for cleanup
+                app.cleanup_azure_resources()
                 root.destroy()
         else:
+            app.cleanup_azure_resources() 
             root.destroy()
     
     root.protocol("WM_DELETE_WINDOW", on_closing)

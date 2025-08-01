@@ -179,6 +179,7 @@ class DeepResearchAgentUI:
         self.agents_client = None
         self.thread = None
         self.current_run = None
+        self.project_client_connection = None
         
         # Initialize image generator
         try:
@@ -373,6 +374,10 @@ class DeepResearchAgentUI:
                 credential=DefaultAzureCredential(),
             )
             
+            # Initialize the project client connection
+            self.project_client_connection = self.project_client.__enter__()
+            self.agents_client = self.project_client_connection.agents.__enter__()
+            
             conn_id = self.project_client.connections.get(name=os.environ["BING_RESOURCE_NAME"]).id
             
             # Initialize Deep Research tool
@@ -420,14 +425,14 @@ class DeepResearchAgentUI:
     def run_research(self, user_input):
         """Run the research process (called in background thread)"""
         try:
-            with self.project_client:
-                with self.project_client.agents as agents_client:
-                    self.agents_client = agents_client
-                    
-                    # Create agent with enhanced instructions for HTML output and image generation
-                    self.update_reasoning("🤖 Creating research agent with image capabilities...\n")
-                    
-                    agent_instructions = """You are a helpful agent that assists in doing comprehensive research and generating rich HTML reports with images.
+            if not self.agents_client:
+                self.update_reasoning("❌ Azure clients not initialized.\n")
+                return
+                
+            # Create agent with enhanced instructions for HTML output and image generation
+            self.update_reasoning("🤖 Creating research agent with image capabilities...\n")
+            
+            agent_instructions = """You are a helpful agent that assists in doing comprehensive research and generating rich HTML reports with images.
 
 IMPORTANT INSTRUCTIONS:
 1. Generate your output in HTML format, not markdown. Use proper HTML tags for headers, paragraphs, lists, etc.
@@ -439,73 +444,70 @@ IMPORTANT INSTRUCTIONS:
 7. When referencing sources, use proper HTML anchor tags for links.
 
 Create a comprehensive, visually enhanced research report using HTML format with multiple relevant image placeholders that will be automatically generated."""
-                    
-                    # Prepare tools - just use deep research for now, image generation will be handled via placeholders
-                    tools = self.deep_research_tool.definitions
-                    
-                    self.agent = agents_client.create_agent(
-                        model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
-                        name="deep-research-agent-with-images",
-                        instructions=agent_instructions,
-                        tools=tools,
-                    )
-                    
-                    # Create thread
-                    self.update_reasoning("📝 Creating conversation thread...\n")
-                    self.thread = agents_client.threads.create()
-                    
-                    # Create message
-                    self.update_reasoning("💬 Sending research request...\n")
-                    message = agents_client.messages.create(
-                        thread_id=self.thread.id,
-                        role="user",
-                        content=user_input,
-                    )
-                    
-                    # Start run
-                    self.update_reasoning("🔍 Starting research process...\n\n")
-                    run = agents_client.runs.create(
-                        thread_id=self.thread.id, 
-                        agent_id=self.agent.id
-                    )
-                    
-                    self.current_run = run
-                    last_message_id = None
-                    
-                    # Poll for progress
-                    while run.status in ("queued", "in_progress") and self.is_processing:
-                        time.sleep(2)
-                        run = agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)
-                        
-                        # Fetch and display intermediate responses
-                        last_message_id = self.fetch_and_display_progress(
-                            self.thread.id, agents_client, last_message_id
-                        )
-                    
-                    # Handle completion or cancellation
-                    if not self.is_processing:
-                        self.update_reasoning("\n⏹️ Research stopped by user.\n")
-                        return
-                    
-                    if run.status == "failed":
-                        error_msg = f"❌ Research failed: {run.last_error}"
-                        self.update_reasoning(f"\n{error_msg}\n")
-                        self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
-                        return
-                    
-                    # Get final results
-                    self.update_reasoning("\n✅ Research completed! Processing images and generating final report...\n")
-                    final_message = agents_client.messages.get_last_message_by_role(
-                        thread_id=self.thread.id, role=MessageRole.AGENT
-                    )
-                    
-                    if final_message:
-                        self.display_final_results_with_images(final_message)
-                    
-                    # Cleanup
-                    if self.agent:
-                        agents_client.delete_agent(self.agent.id)
-                        self.update_reasoning("🧹 Cleanup completed.\n")
+            
+            # Prepare tools - just use deep research for now, image generation will be handled via placeholders
+            tools = self.deep_research_tool.definitions
+            
+            # Create or reuse agent
+            if not self.agent:
+                self.agent = self.agents_client.create_agent(
+                    model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
+                    name="deep-research-agent-with-images",
+                    instructions=agent_instructions,
+                    tools=tools,
+                )
+                
+                # Create thread if it doesn't exist
+                self.update_reasoning("📝 Creating conversation thread...\n")
+                self.thread = self.agents_client.threads.create()
+            
+            # Create message
+            self.update_reasoning("💬 Sending research request...\n")
+            message = self.agents_client.messages.create(
+                thread_id=self.thread.id,
+                role="user",
+                content=user_input,
+            )
+            
+            # Start run
+            self.update_reasoning("🔍 Starting research process...\n\n")
+            run = self.agents_client.runs.create(
+                thread_id=self.thread.id, 
+                agent_id=self.agent.id
+            )
+            
+            self.current_run = run
+            last_message_id = None
+            
+            # Poll for progress
+            while run.status in ("queued", "in_progress") and self.is_processing:
+                time.sleep(2)
+                run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)
+                
+                # Fetch and display intermediate responses
+                last_message_id = self.fetch_and_display_progress(
+                    self.thread.id, self.agents_client, last_message_id
+                )
+            
+            # Handle completion or cancellation
+            if not self.is_processing:
+                self.update_reasoning("\n⏹️ Research stopped by user.\n")
+                return
+            
+            if run.status == "failed":
+                error_msg = f"❌ Research failed: {run.last_error}"
+                self.update_reasoning(f"\n{error_msg}\n")
+                self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
+                return
+            
+            # Get final results
+            self.update_reasoning("\n✅ Research completed! Processing images and generating final report...\n")
+            final_message = self.agents_client.messages.get_last_message_by_role(
+                thread_id=self.thread.id, role=MessageRole.AGENT
+            )
+            
+            if final_message:
+                self.display_final_results_with_images(final_message)
                     
         except Exception as e:
             error_msg = f"❌ Research error: {str(e)}"
@@ -732,6 +734,24 @@ Create a comprehensive, visually enhanced research report using HTML format with
         except Exception as e:
             # Fallback: copy a placeholder message
             messagebox.showwarning("Copy Error", f"Could not copy report: {str(e)}")
+    
+    def cleanup(self):
+        """Clean up Azure clients and connections"""
+        try:
+            if self.agent and self.agents_client:
+                self.agents_client.delete_agent(self.agent.id)
+                self.agent = None
+            
+            if self.agents_client:
+                self.agents_client.__exit__(None, None, None)
+                self.agents_client = None
+                
+            if self.project_client_connection:
+                self.project_client_connection.__exit__(None, None, None)
+                self.project_client_connection = None
+                
+        except Exception as e:
+            print(f"Cleanup error: {e}")  # Log but don't show to user
 
 
 def main():
@@ -774,8 +794,10 @@ def main():
             if messagebox.askokcancel("Quit", "Research is in progress. Stop and quit?"):
                 app.stop_research()
                 time.sleep(1)  # Give time for cleanup
+                app.cleanup()
                 root.destroy()
         else:
+            app.cleanup()
             root.destroy()
     
     root.protocol("WM_DELETE_WINDOW", on_closing)
