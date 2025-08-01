@@ -1134,8 +1134,6 @@ Create a comprehensive, visually enhanced research report using HTML format with
             abs_filepath = os.path.abspath(filepath)
             webbrowser.open(f'file://{abs_filepath}')
             
-            messagebox.showinfo("Opened in Browser", f"Research report saved and opened in browser:\n{filepath}")
-            
         except Exception as e:
             messagebox.showerror("Browser Error", f"Failed to open in browser:\n{str(e)}")
     
