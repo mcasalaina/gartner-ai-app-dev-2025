@@ -467,6 +467,7 @@ IMPORTANT INSTRUCTIONS:
 5. Generate multiple relevant images throughout your research to enhance the report - charts, diagrams, illustrations, concept visualizations, etc.
 6. Use proper HTML structure with headings, paragraphs, lists, and styled elements.
 7. When referencing sources, use proper HTML anchor tags for links.
+8. CRITICAL: Do NOT include any preamble, introduction, or explanatory text. Start immediately with the research content. Do NOT begin with phrases like "Let's design...", "I'll help you...", "Here's what I found...", or similar. Go directly to the research findings.
 
 Create a comprehensive, visually enhanced research report using HTML format with multiple relevant image placeholders that will be automatically generated."""
             
@@ -748,31 +749,27 @@ Create a comprehensive, visually enhanced research report using HTML format with
     
     def copy_report(self):
         """Copy the research report to clipboard"""
-        # Get the HTML content from the HTMLScrolledText widget
         try:
-            # HTMLScrolledText may not have a direct method to get HTML, so we'll get the text content
-            # This is a limitation - we'll copy the visible text content
-            html_content = self.report_text.get("1.0", tk.END).strip()
-            if html_content and html_content != "Research report will appear here...":
+            # Use the stored HTML content instead of trying to get it from HTMLScrolledText
+            if self.current_html_content and self.current_html_content.strip() != "<p>Research report will appear here...</p>":
                 self.root.clipboard_clear()
-                self.root.clipboard_append(html_content)
+                self.root.clipboard_append(self.current_html_content)
                 messagebox.showinfo("Copied", "Research report copied to clipboard!")
             else:
                 messagebox.showwarning("No Content", "No research report to copy.")
         except Exception as e:
-            # Fallback: copy a placeholder message
             messagebox.showwarning("Copy Error", f"Could not copy report: {str(e)}")
     
     def export_to_pdf(self):
         """Export the research report to PDF"""
         from tkinter import filedialog
         
-        # Get the text content from the HTMLScrolledText widget
+        # Use the stored HTML content
         try:
-            html_content = self.report_text.get("1.0", tk.END).strip()
-            if not html_content or html_content == "Research report will appear here...":
+            if not self.current_html_content or self.current_html_content.strip() == "<p>Research report will appear here...</p>":
                 messagebox.showwarning("No Content", "No research report to export.")
                 return
+            html_content = self.current_html_content
         except Exception as e:
             messagebox.showerror("Error", f"Could not get report content: {str(e)}")
             return
@@ -874,15 +871,6 @@ Create a comprehensive, visually enhanced research report using HTML format with
             
             # Build story (content) for PDF
             story = []
-            
-            # Add title
-            story.append(Paragraph("🔬 Deep Research Report with Images", title_style))
-            story.append(Spacer(1, 20))
-            
-            # Add timestamp
-            timestamp_text = f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
-            story.append(Paragraph(timestamp_text, styles['Normal']))
-            story.append(Spacer(1, 20))
             
             # Convert HTML to markdown/text for PDF processing
             if html2text_available and html2text_module:
@@ -1043,7 +1031,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
         import webbrowser
         
         try:
-            # Get the HTML content from the HTMLScrolledText widget
+            # Use the stored HTML content
             html_content = self.get_html_content()
             
             if not html_content or html_content.strip() == "<p>Research report will appear here...</p>":
@@ -1068,7 +1056,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Research Report with Images</title>
+    <title>Research Report</title>
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1132,8 +1120,6 @@ Create a comprehensive, visually enhanced research report using HTML format with
 </head>
 <body>
     <div class="container">
-        <h1>🔬 Deep Research Report with Images</h1>
-        <p class="timestamp">Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
         {html_content}
     </div>
 </body>
