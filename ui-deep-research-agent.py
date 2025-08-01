@@ -452,7 +452,7 @@ class DeepResearchAgentUI:
                 self.agent = self.agents_client.create_agent(
                     model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
                     name="deep-research-agent-ui",
-                    instructions="You are a helpful text-only research agent that assists in doing comprehensive research. You should never search for, load, display, or reference images in any way. Focus exclusively on text-based research and provide detailed written analysis, reports, and information. Do not attempt to find visual content or suggest image-based resources.",
+                    instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
                     tools=self.deep_research_tool.definitions,
                 )
             else:
