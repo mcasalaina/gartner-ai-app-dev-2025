@@ -452,7 +452,7 @@ class DeepResearchAgentUI:
                 self.agent = self.agents_client.create_agent(
                     model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
                     name="deep-research-agent-ui",
-                    instructions="You are a helpful agent that assists in doing comprehensive research.",
+                    instructions="You are a helpful text-only research agent that assists in doing comprehensive research. You should never search for, load, display, or reference images in any way. Focus exclusively on text-based research and provide detailed written analysis, reports, and information. Do not attempt to find visual content or suggest image-based resources.",
                     tools=self.deep_research_tool.definitions,
                 )
             else:
