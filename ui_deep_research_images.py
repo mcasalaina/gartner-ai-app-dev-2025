@@ -52,16 +52,25 @@ class ImageGenerator:
             )
         
         # Ensure images directory exists
-        self.images_dir = "./images"
+        self.images_dir = "./html/images"
         os.makedirs(self.images_dir, exist_ok=True)
     
     def generate_image(self, prompt: str) -> str:
         """Generate an image from a text prompt and save it to the images directory"""
         try:
-            # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_id = str(uuid.uuid4())[:8]
-            filename = f"generated_image_{timestamp}_{unique_id}.png"
+            # Generate filename based on prompt
+            import hashlib
+            # Create a safe filename from the prompt
+            safe_prompt = re.sub(r'[^a-zA-Z0-9\s]', '', prompt)  # Remove special chars
+            safe_prompt = re.sub(r'\s+', '_', safe_prompt.strip())  # Replace spaces with underscores
+            safe_prompt = safe_prompt.lower()  # Convert to lowercase
+            
+            # Truncate if too long and add hash for uniqueness
+            if len(safe_prompt) > 50:
+                prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
+                safe_prompt = safe_prompt[:42] + '_' + prompt_hash
+            
+            filename = f"{safe_prompt}.png"
             filepath = os.path.join(self.images_dir, filename)
 
             api_version = os.environ.get("IMAGE_API_VERSION", "2025-04-01-preview")
@@ -124,7 +133,7 @@ class ImageGenerationTool:
             "type": "function",
             "function": {
                 "name": "generate_image",
-                "description": "Generate an image based on a text prompt and save it to the ./images directory. Use this to create relevant visuals for your research. The generated images are saved as PNG files with 1024x1024 resolution and medium quality.",
+                "description": "Generate an image based on a text prompt and save it to the ./html/images directory. Use this to create relevant visuals for your research. The generated images are saved as PNG files with 1024x1024 resolution and medium quality.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -146,8 +155,8 @@ class ImageGenerationTool:
                 return {
                     "status": "success",
                     "filename": filename,
-                    "path": f"./images/{filename}",
-                    "message": f"Image successfully generated and saved as {filename} in the ./images directory"
+                    "path": f"./html/images/{filename}",
+                    "message": f"Image successfully generated and saved as {filename} in the ./html/images directory"
                 }
             except Exception as e:
                 return {
@@ -180,6 +189,7 @@ class DeepResearchAgentUI:
         self.thread = None
         self.current_run = None
         self.project_client_connection = None
+        self.current_html_content = ""  # Store current HTML content
         
         # Initialize image generator
         try:
@@ -368,7 +378,13 @@ class DeepResearchAgentUI:
         self.pdf_button = ttk.Button(button_frame, text="📄 Export to PDF", 
                                     style='Clear.TButton',
                                     command=self.export_to_pdf)
-        self.pdf_button.pack(side='right')
+        self.pdf_button.pack(side='right', padx=(15, 0))
+        
+        # Open in Browser button
+        self.browser_button = ttk.Button(button_frame, text="🌐 Open In Browser", 
+                                        style='Clear.TButton',
+                                        command=self.open_in_browser)
+        self.browser_button.pack(side='right')
     
     def initialize_azure_clients(self):
         """Initialize Azure AI clients"""
@@ -440,6 +456,8 @@ class DeepResearchAgentUI:
             self.update_reasoning("🤖 Creating research agent with image capabilities...\n")
             
             agent_instructions = """You are a helpful agent that assists in doing comprehensive research and generating rich HTML reports with images.
+            Search the internet for text content, but do not ever search the internet for images. Do not try to open or embed images from the web.
+            All image content must be generated using the system's image generation capabilities.
 
 IMPORTANT INSTRUCTIONS:
 1. Generate your output in HTML format, not markdown. Use proper HTML tags for headers, paragraphs, lists, etc.
@@ -675,6 +693,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
     def update_report(self, html_text):
         """Update the research report panel with HTML rendering (thread-safe)"""
         def _update():
+            self.current_html_content = html_text  # Store HTML content
             self.report_text.set_html(html_text)
         
         self.root.after(0, _update)
@@ -710,6 +729,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.reasoning_text.configure(state='disabled')
         
         # Clear report panel
+        self.current_html_content = ""
         self.report_text.set_html("<p>Research report will appear here...</p>")
         
         # Reset input to default text
@@ -723,6 +743,7 @@ Create a comprehensive, visually enhanced research report using HTML format with
         self.reasoning_text.configure(state='disabled')
         
         # Clear report panel
+        self.current_html_content = ""
         self.report_text.set_html("<p>Research report will appear here...</p>")
     
     def copy_report(self):
@@ -1010,6 +1031,133 @@ Create a comprehensive, visually enhanced research report using HTML format with
         text = re.sub(r'<sup>(\d+)</sup>', r'[\1]', text)
         
         return text
+    
+    def fix_image_paths_for_browser(self, html_content):
+        """Fix image paths in HTML content for browser viewing"""
+        # Replace any ./html/images/ with ./images/ since the HTML file will be in the html directory
+        html_content = html_content.replace('./html/images/', './images/')
+        return html_content
+    
+    def open_in_browser(self):
+        """Save the research report as HTML file and open it in browser"""
+        import webbrowser
+        
+        try:
+            # Get the HTML content from the HTMLScrolledText widget
+            html_content = self.get_html_content()
+            
+            if not html_content or html_content.strip() == "<p>Research report will appear here...</p>":
+                messagebox.showwarning("No Content", "No research report to open in browser.")
+                return
+            
+            # Fix image paths for browser viewing
+            html_content = self.fix_image_paths_for_browser(html_content)
+            
+            # Ensure html directory exists
+            html_dir = "./html"
+            os.makedirs(html_dir, exist_ok=True)
+            
+            # Create a complete HTML document
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"research_report_{timestamp}.html"
+            filepath = os.path.join(html_dir, filename)
+            
+            # Create complete HTML document
+            full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Research Report with Images</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background-color: #f9f9f9;
+        }}
+        .container {{
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }}
+        h2 {{
+            color: #34495e;
+            margin-top: 30px;
+        }}
+        h3 {{
+            color: #34495e;
+            margin-top: 25px;
+        }}
+        img {{
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin: 10px 0;
+        }}
+        .timestamp {{
+            color: #7f8c8d;
+            font-style: italic;
+            margin-bottom: 30px;
+        }}
+        a {{
+            color: #3498db;
+            text-decoration: none;
+        }}
+        a:hover {{
+            text-decoration: underline;
+        }}
+        ul, ol {{
+            margin: 10px 0;
+            padding-left: 30px;
+        }}
+        li {{
+            margin: 5px 0;
+        }}
+        sup {{
+            color: #3498db;
+            font-weight: bold;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Deep Research Report with Images</h1>
+        <p class="timestamp">Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
+        {html_content}
+    </div>
+</body>
+</html>"""
+            
+            # Write the HTML file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(full_html)
+            
+            # Open the file in the default browser
+            # Convert to absolute path for browser
+            abs_filepath = os.path.abspath(filepath)
+            webbrowser.open(f'file://{abs_filepath}')
+            
+            messagebox.showinfo("Opened in Browser", f"Research report saved and opened in browser:\n{filepath}")
+            
+        except Exception as e:
+            messagebox.showerror("Browser Error", f"Failed to open in browser:\n{str(e)}")
+    
+    def get_html_content(self):
+        """Get HTML content from the stored content"""
+        if self.current_html_content and self.current_html_content.strip() != "<p>Research report will appear here...</p>":
+            return self.current_html_content
+        return ""
     
     def cleanup(self):
         """Clean up Azure clients and connections"""

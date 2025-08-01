@@ -152,3 +152,6 @@ temp/
 
 # Generated images
 images/
+
+# HTML output directory
+html/
