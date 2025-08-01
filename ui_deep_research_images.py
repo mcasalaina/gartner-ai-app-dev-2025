@@ -357,11 +357,18 @@ class DeepResearchAgentUI:
                                      state='disabled')
         self.stop_button.pack(side='left')
         
+        # Right side buttons
         # Copy button for research report
         self.copy_button = ttk.Button(button_frame, text="📋 Copy Report", 
                                      style='Clear.TButton',
                                      command=self.copy_report)
-        self.copy_button.pack(side='right')
+        self.copy_button.pack(side='right', padx=(15, 0))
+        
+        # PDF Export button
+        self.pdf_button = ttk.Button(button_frame, text="📄 Export to PDF", 
+                                    style='Clear.TButton',
+                                    command=self.export_to_pdf)
+        self.pdf_button.pack(side='right')
     
     def initialize_azure_clients(self):
         """Initialize Azure AI clients"""
@@ -734,6 +741,275 @@ Create a comprehensive, visually enhanced research report using HTML format with
         except Exception as e:
             # Fallback: copy a placeholder message
             messagebox.showwarning("Copy Error", f"Could not copy report: {str(e)}")
+    
+    def export_to_pdf(self):
+        """Export the research report to PDF"""
+        from tkinter import filedialog
+        
+        # Get the text content from the HTMLScrolledText widget
+        try:
+            html_content = self.report_text.get("1.0", tk.END).strip()
+            if not html_content or html_content == "Research report will appear here...":
+                messagebox.showwarning("No Content", "No research report to export.")
+                return
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not get report content: {str(e)}")
+            return
+        
+        try:
+            # Import PDF libraries here to avoid import errors if not installed
+            from reportlab.lib.pagesizes import letter, A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+            from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+            from reportlab.lib import colors
+            from reportlab.lib.colors import HexColor
+            
+            # Try to import html2text, fallback to manual cleaning if not available
+            html2text_module = None
+            try:
+                import html2text as html2text_module
+                html2text_available = True
+            except ImportError:
+                html2text_available = False
+            
+            # Ask user for save location
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"research_report_{timestamp}.pdf"
+            
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+                initialfile=default_filename,
+                title="Export Research Report to PDF"
+            )
+            
+            if not file_path:
+                return  # User cancelled
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(file_path, pagesize=letter,
+                                  rightMargin=72, leftMargin=72,
+                                  topMargin=72, bottomMargin=18)
+            
+            # Get styles
+            styles = getSampleStyleSheet()
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=20,
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                textColor=HexColor('#2c3e50')
+            )
+            
+            heading1_style = ParagraphStyle(
+                'CustomHeading1',
+                parent=styles['Heading1'],
+                fontSize=16,
+                spaceAfter=12,
+                spaceBefore=20,
+                textColor=HexColor('#34495e')
+            )
+            
+            heading2_style = ParagraphStyle(
+                'CustomHeading2', 
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=10,
+                spaceBefore=16,
+                textColor=HexColor('#34495e')
+            )
+            
+            heading3_style = ParagraphStyle(
+                'CustomHeading3',
+                parent=styles['Heading3'],
+                fontSize=12,
+                spaceAfter=8,
+                spaceBefore=12,
+                textColor=HexColor('#34495e')
+            )
+            
+            body_style = ParagraphStyle(
+                'CustomBody',
+                parent=styles['Normal'],
+                fontSize=11,
+                spaceAfter=6,
+                alignment=TA_JUSTIFY,
+                leftIndent=0,
+                rightIndent=0
+            )
+            
+            citation_style = ParagraphStyle(
+                'Citations',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=4,
+                leftIndent=20
+            )
+            
+            # Build story (content) for PDF
+            story = []
+            
+            # Add title
+            story.append(Paragraph("🔬 Deep Research Report with Images", title_style))
+            story.append(Spacer(1, 20))
+            
+            # Add timestamp
+            timestamp_text = f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+            story.append(Paragraph(timestamp_text, styles['Normal']))
+            story.append(Spacer(1, 20))
+            
+            # Convert HTML to markdown/text for PDF processing
+            if html2text_available and html2text_module:
+                try:
+                    h = html2text_module.HTML2Text()
+                    h.ignore_links = False
+                    h.ignore_images = True  # We'll handle images separately
+                    markdown_content = h.handle(html_content)
+                except:
+                    # Fallback: use the HTML content directly and clean it
+                    markdown_content = self.clean_html_for_pdf(html_content)
+            else:
+                # Fallback: use the HTML content directly and clean it
+                markdown_content = self.clean_html_for_pdf(html_content)
+            
+            # Process the content
+            lines = markdown_content.split('\n')
+            current_paragraph = ""
+            
+            for line in lines:
+                line = line.strip()
+                
+                if not line:
+                    # Empty line - finish current paragraph if any
+                    if current_paragraph.strip():
+                        # Clean up markdown formatting for PDF
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        story.append(Spacer(1, 6))
+                        current_paragraph = ""
+                    continue
+                
+                # Headers
+                if line.startswith('### '):
+                    if current_paragraph.strip():
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        current_paragraph = ""
+                    story.append(Spacer(1, 12))
+                    story.append(Paragraph(line[4:], heading3_style))
+                    
+                elif line.startswith('## '):
+                    if current_paragraph.strip():
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        current_paragraph = ""
+                    story.append(Spacer(1, 16))
+                    story.append(Paragraph(line[3:], heading2_style))
+                    
+                elif line.startswith('# '):
+                    if current_paragraph.strip():
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        current_paragraph = ""
+                    story.append(Spacer(1, 20))
+                    story.append(Paragraph(line[2:], heading1_style))
+                
+                # List items
+                elif line.startswith('- ') or re.match(r'^\d+\.\s', line):
+                    if current_paragraph.strip():
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        current_paragraph = ""
+                    
+                    # Handle list items
+                    cleaned_line = self.clean_markdown_for_pdf(line)
+                    story.append(Paragraph(cleaned_line, citation_style))
+                
+                # Citation numbers (standalone)
+                elif re.match(r'^\d+\.\s.*', line) and '(' in line and ')' in line:
+                    if current_paragraph.strip():
+                        cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                        story.append(Paragraph(cleaned_text, body_style))
+                        current_paragraph = ""
+                    
+                    cleaned_line = self.clean_markdown_for_pdf(line)
+                    story.append(Paragraph(cleaned_line, citation_style))
+                
+                # Regular content
+                else:
+                    current_paragraph += line + " "
+            
+            # Handle any remaining paragraph
+            if current_paragraph.strip():
+                cleaned_text = self.clean_markdown_for_pdf(current_paragraph)
+                story.append(Paragraph(cleaned_text, body_style))
+            
+            # Build PDF
+            doc.build(story)
+            
+            messagebox.showinfo("Export Successful", f"Research report exported to:\n{file_path}")
+            
+        except ImportError:
+            messagebox.showerror("Missing Dependency", 
+                               "The reportlab library is required for PDF export.\n"
+                               "Please install it using: pip install reportlab\n"
+                               "Optional: pip install html2text for better HTML conversion")
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
+    
+    def clean_html_for_pdf(self, html_content):
+        """Clean HTML content for PDF processing when html2text is not available"""
+        # Remove HTML tags and convert to plain text
+        import re
+        
+        # Convert headers
+        html_content = re.sub(r'<h([1-6])[^>]*>(.*?)</h[1-6]>', r'\n# \2\n', html_content)
+        
+        # Convert paragraphs
+        html_content = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', html_content)
+        
+        # Convert line breaks
+        html_content = re.sub(r'<br[^>]*>', '\n', html_content)
+        
+        # Convert lists
+        html_content = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1\n', html_content)
+        html_content = re.sub(r'<[ou]l[^>]*>', '', html_content)
+        html_content = re.sub(r'</[ou]l>', '\n', html_content)
+        
+        # Convert links
+        html_content = re.sub(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', r'\2 (\1)', html_content)
+        
+        # Remove remaining HTML tags
+        html_content = re.sub(r'<[^>]+>', '', html_content)
+        
+        # Clean up extra whitespace
+        html_content = re.sub(r'\n\s*\n', '\n\n', html_content)
+        
+        return html_content.strip()
+    
+    def clean_markdown_for_pdf(self, text):
+        """Clean markdown formatting for PDF rendering"""
+        # Convert markdown links [text](url) to just text with URL in parentheses
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', text)
+        
+        # Convert bold **text** to <b>text</b>
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        
+        # Convert italic *text* to <i>text</i>
+        text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+        
+        # Convert citations [n] to superscript
+        text = re.sub(r'\[(\d+)\]', r'<sup>\1</sup>', text)
+        
+        # Remove HTML superscript tags and convert to plain text
+        text = re.sub(r'<sup>(\d+)</sup>', r'[\1]', text)
+        
+        return text
     
     def cleanup(self):
         """Clean up Azure clients and connections"""
