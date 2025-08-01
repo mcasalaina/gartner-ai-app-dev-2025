@@ -29,6 +29,9 @@ numpy>=1.24.0
 markdown>=3.4.0
 tkhtmlview>=0.3.0
 
+# PDF generation
+reportlab>=4.0.0
+
 # For Playwright MCP integration (MCP tool support should be in azure-ai-agents)
 # Note: Playwright MCP server runs as separate Node.js process
 # No additional Python packages needed for MCP client functionality
