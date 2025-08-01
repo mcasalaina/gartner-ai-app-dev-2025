@@ -590,6 +590,9 @@ Create a comprehensive, visually enhanced research report using HTML format with
         # Add main content
         text_summary = "\n\n".join([t.text.value.strip() for t in message.text_messages])
         
+        # Postprocess to remove preamble before ```html tag
+        text_summary = self.postprocess_remove_preamble(text_summary)
+        
         # Convert citations to superscript format
         text_summary = self.convert_citations_to_superscript(text_summary)
         
@@ -645,6 +648,26 @@ Create a comprehensive, visually enhanced research report using HTML format with
         
         # Update the report display
         self.update_report(report_content)
+    
+    def postprocess_remove_preamble(self, text_content):
+        """Remove everything before ```html tag and the tag itself"""
+        # Look for ```html marker
+        html_marker = "```html"
+        
+        if html_marker in text_content:
+            # Find the position of ```html
+            html_start = text_content.find(html_marker)
+            # Remove everything before and including ```html
+            cleaned_content = text_content[html_start + len(html_marker):].strip()
+            
+            # Also remove closing ``` if it exists at the end
+            if cleaned_content.endswith("```"):
+                cleaned_content = cleaned_content[:-3].strip()
+            
+            return cleaned_content
+        
+        # If no ```html marker found, return original content
+        return text_content
     
     def process_image_placeholders(self, html_content):
         """Process image generation placeholders and replace with actual generated images"""
