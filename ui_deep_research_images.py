@@ -176,7 +176,9 @@ class DeepResearchAgentUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🔬 Deep Research Agent with Images")
-        self.root.geometry("1400x900")
+        
+        # Start maximized
+        self.root.state('zoomed')  # Windows-specific maximized state
         self.root.minsize(1000, 700)
         
         # Configure style
@@ -203,6 +205,9 @@ class DeepResearchAgentUI:
         # Create UI elements
         self.create_widgets()
         
+        # Force initial layout update to prevent rendering issues
+        self.root.update_idletasks()
+        
         # Initialize Azure clients
         self.initialize_azure_clients()
     
@@ -228,16 +233,18 @@ class DeepResearchAgentUI:
     
     def create_widgets(self):
         """Create and layout all UI widgets"""
+        # Configure root grid weights first
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        
         # Main container with padding
         main_frame = ttk.Frame(self.root, padding="15")
         main_frame.grid(row=0, column=0, sticky="nsew")
         
-        # Configure grid weights
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        # Configure main frame grid weights
         main_frame.columnconfigure(0, weight=1)  # Left column (request + reasoning)
         main_frame.columnconfigure(1, weight=3)  # Right column (research report gets most space)
-        main_frame.rowconfigure(1, weight=1)
+        main_frame.rowconfigure(1, weight=1)     # Main content row
         
         # Title
         title_label = tk.Label(main_frame, text="🔬 Deep Research Agent with Images", 
@@ -683,6 +690,8 @@ Create a comprehensive, visually enhanced research report using HTML format with
                     self.update_reasoning(f"🎨 Generating image: {prompt[:50]}...\n")
                     filename = self.image_generator.generate_image(prompt)
                     self.update_reasoning(f"✅ Image generated: {filename}\n")
+                    
+                    # Use relative path for browser compatibility - will be converted for Tkinter display
                     return f'<img src="./images/{filename}" alt="{alt_text}" style="max-width: 100%; height: auto;">'
                 else:
                     self.update_reasoning(f"⚠️ Image generation not available: {alt_text}\n")
@@ -717,8 +726,10 @@ Create a comprehensive, visually enhanced research report using HTML format with
     def update_report(self, html_text):
         """Update the research report panel with HTML rendering (thread-safe)"""
         def _update():
-            self.current_html_content = html_text  # Store HTML content
-            self.report_text.set_html(html_text)
+            self.current_html_content = html_text  # Store original HTML content
+            # Fix image paths for Tkinter display
+            display_html = self.fix_image_paths_for_tkinter(html_text) 
+            self.report_text.set_html(display_html)
         
         self.root.after(0, _update)
     
@@ -1045,8 +1056,22 @@ Create a comprehensive, visually enhanced research report using HTML format with
     
     def fix_image_paths_for_browser(self, html_content):
         """Fix image paths in HTML content for browser viewing"""
-        # Replace any ./html/images/ with ./images/ since the HTML file will be in the html directory
+        # Convert html/images paths back to just images for browser (since HTML will be in html directory)
         html_content = html_content.replace('./html/images/', './images/')
+        
+        return html_content
+    
+    def fix_image_paths_for_tkinter(self, html_content):
+        """Fix image paths in HTML content for Tkinter HTMLScrolledText widget"""
+        # Convert relative paths to use html/images directory for Tkinter display
+        def replace_relative_path(match):
+            filename = match.group(1)
+            # For Tkinter, use the html/images path
+            return f'src="./html/images/{filename}"'
+        
+        # Replace ./images/ paths with ./html/images/ paths for Tkinter
+        html_content = re.sub(r'src="\.\/images\/([^"]+)"', replace_relative_path, html_content)
+        
         return html_content
     
     def open_in_browser(self):
