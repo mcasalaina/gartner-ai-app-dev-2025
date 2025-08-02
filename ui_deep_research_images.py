@@ -727,8 +727,9 @@ Create a comprehensive, visually enhanced research report using HTML format with
         """Update the research report panel with HTML rendering (thread-safe)"""
         def _update():
             self.current_html_content = html_text  # Store original HTML content
-            # Fix image paths for Tkinter display
-            display_html = self.fix_image_paths_for_tkinter(html_text) 
+            # Fix image paths for Tkinter display and remove head element
+            display_html = self.fix_image_paths_for_tkinter(html_text)
+            display_html = self.remove_head_for_tkinter(display_html)
             self.report_text.set_html(display_html)
         
         self.root.after(0, _update)
@@ -1073,6 +1074,22 @@ Create a comprehensive, visually enhanced research report using HTML format with
         html_content = re.sub(r'src="\.\/images\/([^"]+)"', replace_relative_path, html_content)
         
         return html_content
+    
+    def remove_head_for_tkinter(self, html_content):
+        """Remove <head> element from HTML content for Tkinter display"""
+        # Remove everything from <head> to </head> (case insensitive)
+        html_content = re.sub(r'<head[^>]*>.*?</head>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Also remove <!DOCTYPE> declaration if present
+        html_content = re.sub(r'<!DOCTYPE[^>]*>', '', html_content, flags=re.IGNORECASE)
+        
+        # Remove <html> and </html> tags if present
+        html_content = re.sub(r'</?html[^>]*>', '', html_content, flags=re.IGNORECASE)
+        
+        # Remove <body> and </body> tags if present, but keep the content
+        html_content = re.sub(r'</?body[^>]*>', '', html_content, flags=re.IGNORECASE)
+        
+        return html_content.strip()
     
     def open_in_browser(self):
         """Save the research report as HTML file and open it in browser"""
