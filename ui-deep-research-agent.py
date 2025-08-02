@@ -185,6 +185,9 @@ class DeepResearchAgentUI:
         self.root.geometry("1400x900")
         self.root.minsize(1000, 700)
         
+        # Maximize the window on startup
+        self.root.state('zoomed')  # Windows-specific maximize
+        
         # Configure style
         self.setup_styles()
         
@@ -200,6 +203,9 @@ class DeepResearchAgentUI:
         
         # Create UI elements
         self.create_widgets()
+        
+        # Force initial layout update after widgets are created
+        self.root.update_idletasks()
         
         # Initialize Azure clients
         self.initialize_azure_clients()
@@ -259,7 +265,7 @@ class DeepResearchAgentUI:
         main_frame = ttk.Frame(self.root, padding="15")
         main_frame.grid(row=0, column=0, sticky="nsew")
         
-        # Configure grid weights
+        # Configure grid weights for responsive layout
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)  # Left column (request + reasoning)
@@ -290,6 +296,9 @@ class DeepResearchAgentUI:
         
         # Control buttons
         self.create_control_buttons(main_frame)
+        
+        # Force layout calculation
+        main_frame.update_idletasks()
     
     def create_input_section(self, parent):
         """Create the input section with request box"""
@@ -458,6 +467,7 @@ class DeepResearchAgentUI:
         
         # Create a span for the UI interaction if tracing is enabled
         if self.tracer:
+            self.update_reasoning("📊 Creating trace span for research request...\n")
             with self.tracer.start_as_current_span("user_research_request") as ui_span:
                 ui_span.set_attribute("ui.action", "start_research")
                 ui_span.set_attribute("user.input.length", len(user_input))
@@ -465,6 +475,7 @@ class DeepResearchAgentUI:
                 
                 self._start_research_internal(user_input)
         else:
+            self.update_reasoning("⚠️ Tracing not available - running without traces\n")
             self._start_research_internal(user_input)
     
     def _start_research_internal(self, user_input):
