@@ -231,11 +231,12 @@ class DeepResearchAgentUI:
             content_recording = os.environ.get("AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", "true").lower()
             os.environ["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] = content_recording
             
-            # Get Application Insights connection string from the AI Foundry project
-            connection_string = self.project_client.telemetry.get_connection_string()  # type: ignore
+            # Get Application Insights connection string from environment variable
+            connection_string = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
             
             if not connection_string:
-                self.update_reasoning("⚠️ Application Insights not enabled. Enable in Azure AI Foundry project -> Tracing.\n")
+                self.update_reasoning("⚠️ APPLICATIONINSIGHTS_CONNECTION_STRING environment variable not set.\n")
+                self.update_reasoning("   Set this in your .env file - get it from Azure Portal > Application Insights > Overview\n")
                 return False
             
             # Configure Azure Monitor tracing
