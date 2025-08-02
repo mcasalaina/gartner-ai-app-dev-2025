@@ -518,7 +518,7 @@ class DeepResearchAgentUI:
             return self._run_research_internal(user_input, None)
     
     def _run_research_internal(self, user_input, span=None):
-        """Internal research method with optional span for tracing"""
+        """Internal research method with comprehensive tracing"""
         try:
             # Check if clients are initialized
             if not self.agents_client:
@@ -527,20 +527,27 @@ class DeepResearchAgentUI:
             # Create agent if it doesn't exist
             if not self.agent:
                 self.update_reasoning("🤖 Creating research agent...\n")
-                if span:
-                    with self.tracer.start_as_current_span("create_agent") as agent_span:  # type: ignore
+                if span and self.tracer:
+                    with self.tracer.start_as_current_span("create_research_agent") as agent_span:
                         agent_span.set_attribute("agent.operation", "create")
+                        agent_span.set_attribute("agent.model", os.environ.get("AGENT_MODEL_DEPLOYMENT_NAME", "unknown"))
+                        
+                        start_time = time.time()
                         self.agent = self.agents_client.create_agent(
                             model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
                             name="deep-research-agent-ui",
                             instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
                             tools=self.deep_research_tool.definitions,
                         )
+                        creation_time = time.time() - start_time
+                        
                         agent_span.set_attribute("agent.id", self.agent.id)
+                        agent_span.set_attribute("agent.creation_time_seconds", creation_time)
+                        agent_span.set_attribute("agent.tools_count", len(self.deep_research_tool.definitions))
                 else:
                     self.agent = self.agents_client.create_agent(
                         model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
-                        name="deep-research-agent-ui",
+                        name="deep-research-agent-ui", 
                         instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
                         tools=self.deep_research_tool.definitions,
                     )
@@ -553,11 +560,16 @@ class DeepResearchAgentUI:
             # Create thread if it doesn't exist
             if not self.thread:
                 self.update_reasoning("📝 Creating conversation thread...\n")
-                if span:
-                    with self.tracer.start_as_current_span("create_thread") as thread_span:  # type: ignore
-                        self.thread = self.agents_client.threads.create()
-                        thread_span.set_attribute("thread.id", self.thread.id)
+                if span and self.tracer:
+                    with self.tracer.start_as_current_span("create_conversation_thread") as thread_span:
                         thread_span.set_attribute("thread.operation", "create")
+                        
+                        start_time = time.time()
+                        self.thread = self.agents_client.threads.create()
+                        creation_time = time.time() - start_time
+                        
+                        thread_span.set_attribute("thread.id", self.thread.id)
+                        thread_span.set_attribute("thread.creation_time_seconds", creation_time)
                 else:
                     self.thread = self.agents_client.threads.create()
             else:
@@ -566,17 +578,27 @@ class DeepResearchAgentUI:
                     span.set_attribute("thread.operation", "reuse")
                     span.set_attribute("thread.id", self.thread.id)
             
-            # Create message
+            # Create message with detailed tracing
             self.update_reasoning("💬 Sending research request...\n")
-            if span:
-                with self.tracer.start_as_current_span("create_message") as msg_span:  # type: ignore
+            if span and self.tracer:
+                with self.tracer.start_as_current_span("create_user_message") as msg_span:
+                    msg_span.set_attribute("message.role", "user")
+                    msg_span.set_attribute("message.content_length", len(user_input))
+                    msg_span.set_attribute("message.content_preview", user_input[:200])  # First 200 chars
+                    
+                    # Analyze user input for better tracing
+                    self._analyze_user_input(user_input, msg_span)
+                    
+                    start_time = time.time()
                     message = self.agents_client.messages.create(
                         thread_id=self.thread.id,
                         role="user",
                         content=user_input,
                     )
+                    creation_time = time.time() - start_time
+                    
                     msg_span.set_attribute("message.id", message.id)
-                    msg_span.set_attribute("message.role", "user")
+                    msg_span.set_attribute("message.creation_time_seconds", creation_time)
             else:
                 message = self.agents_client.messages.create(
                     thread_id=self.thread.id,
@@ -584,24 +606,38 @@ class DeepResearchAgentUI:
                     content=user_input,
                 )
             
-            # Start run
+            # Start run with comprehensive tracing
             self.update_reasoning("🔍 Starting research process...\n\n")
             start_time = time.time()
             
-            if span:
-                with self.tracer.start_as_current_span("execute_research") as research_span:  # type: ignore
+            if span and self.tracer:
+                with self.tracer.start_as_current_span("execute_agent_run") as run_span:
+                    run_span.set_attribute("run.agent_id", self.agent.id)
+                    run_span.set_attribute("run.thread_id", self.thread.id)
+                    run_span.set_attribute("run.user_message_id", message.id)
+                    
                     run = self.agents_client.runs.create(
                         thread_id=self.thread.id, 
                         agent_id=self.agent.id
                     )
-                    research_span.set_attribute("run.id", run.id)
-                    research_span.set_attribute("research.start_time", start_time)
+                    run_span.set_attribute("run.id", run.id)
+                    run_span.set_attribute("run.initial_status", run.status)
+                    run_span.set_attribute("run.start_time", start_time)
                     
-                    result = self._execute_research_run(run, research_span)
+                    result = self._execute_research_run(run, run_span)
                     
                     end_time = time.time()
-                    research_span.set_attribute("research.duration_seconds", end_time - start_time)
-                    research_span.set_attribute("research.status", run.status)
+                    total_duration = end_time - start_time
+                    run_span.set_attribute("run.total_duration_seconds", total_duration)
+                    run_span.set_attribute("run.final_status", run.status)
+                    
+                    # Add performance classification
+                    if total_duration < 30:
+                        run_span.set_attribute("run.performance", "fast")
+                    elif total_duration < 120:
+                        run_span.set_attribute("run.performance", "normal")
+                    else:
+                        run_span.set_attribute("run.performance", "slow")
                     
                     return result
             else:
@@ -616,6 +652,7 @@ class DeepResearchAgentUI:
             self.update_reasoning(f"\n{error_msg}\n")
             if span:
                 span.set_attribute("error.message", str(e))
+                span.set_attribute("error.type", type(e).__name__)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
             self.root.after(0, lambda: messagebox.showerror("Research Error", error_msg))
         
@@ -624,111 +661,420 @@ class DeepResearchAgentUI:
             self.root.after(0, self.hide_loading)
             self.root.after(0, self.update_button_states)
     
+    def _analyze_user_input(self, user_input, span):
+        """Analyze user input for tracing insights"""
+        try:
+            input_lower = user_input.lower()
+            
+            # Detect query type
+            if "restaurant" in input_lower or "food" in input_lower:
+                span.set_attribute("query.domain", "restaurant")
+            elif "business" in input_lower or "company" in input_lower:
+                span.set_attribute("query.domain", "business")
+            elif "marketing" in input_lower or "promotion" in input_lower:
+                span.set_attribute("query.domain", "marketing")
+            elif "technology" in input_lower or "software" in input_lower:
+                span.set_attribute("query.domain", "technology")
+            else:
+                span.set_attribute("query.domain", "general")
+            
+            # Detect specific requirements
+            requirements = []
+            if "strategy" in input_lower:
+                requirements.append("strategy")
+            if "menu" in input_lower:
+                requirements.append("menu")
+            if "staff" in input_lower or "recruitment" in input_lower:
+                requirements.append("staffing")
+            if "marketing" in input_lower:
+                requirements.append("marketing")
+            if "faq" in input_lower:
+                requirements.append("faq")
+            if "location" in input_lower or "address" in input_lower:
+                requirements.append("location_analysis")
+            
+            if requirements:
+                span.set_attribute("query.requirements", ",".join(requirements))
+                span.set_attribute("query.complexity", "high" if len(requirements) > 3 else "medium" if len(requirements) > 1 else "low")
+            
+            # Detect geographic context
+            if "san francisco" in input_lower:
+                span.set_attribute("query.location", "san_francisco")
+            elif "california" in input_lower:
+                span.set_attribute("query.location", "california")
+            
+            # Question complexity analysis
+            question_count = input_lower.count('?')
+            sentence_count = max(1, input_lower.count('.') + input_lower.count('!') + question_count)
+            
+            span.set_attribute("query.question_count", question_count)
+            span.set_attribute("query.sentence_count", sentence_count)
+            span.set_attribute("query.word_count", len(user_input.split()))
+            
+        except Exception as e:
+            span.set_attribute("query.analysis_error", str(e))
+    
     def _execute_research_run(self, run, span=None):
-        """Execute the research run with optional tracing"""
+        """Execute the research run with comprehensive tracing"""
         self.current_run = run
         last_message_id = None
         citations_count = 0
+        reasoning_steps = 0
+        polling_iterations = 0
+        
+        # Create span for the polling phase
+        if span and self.tracer:
+            with self.tracer.start_as_current_span("research_polling_phase") as polling_span:
+                polling_span.set_attribute("run.id", run.id)
+                polling_span.set_attribute("run.initial_status", run.status)
+                
+                return self._execute_polling_loop(run, polling_span, last_message_id, 
+                                                citations_count, reasoning_steps, polling_iterations)
+        else:
+            return self._execute_polling_loop(run, None, last_message_id, 
+                                            citations_count, reasoning_steps, polling_iterations)
+    
+    def _execute_polling_loop(self, run, polling_span, last_message_id, citations_count, reasoning_steps, polling_iterations):
+        """Execute the main polling loop with detailed tracing"""
         
         # Poll for progress
         while run.status in ("queued", "in_progress") and self.is_processing:
-            time.sleep(2)
-            run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)  # type: ignore
+            polling_iterations += 1
             
-            # Fetch and display intermediate responses
-            last_message_id = self.fetch_and_display_progress(
-                self.thread.id, self.agents_client, last_message_id  # type: ignore
-            )
+            # Create span for each polling iteration
+            if polling_span and self.tracer:
+                with self.tracer.start_as_current_span("polling_iteration") as iter_span:
+                    iter_span.set_attribute("iteration.number", polling_iterations)
+                    iter_span.set_attribute("run.status", run.status)
+                    
+                    time.sleep(2)
+                    
+                    # Get updated run status
+                    run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)  # type: ignore
+                    iter_span.set_attribute("run.new_status", run.status)
+                    
+                    # Check for progress messages
+                    old_last_message_id = last_message_id
+                    last_message_id = self.fetch_and_display_progress(
+                        self.thread.id, self.agents_client, last_message_id  # type: ignore
+                    )
+                    
+                    # Track if we got new content
+                    if last_message_id != old_last_message_id:
+                        reasoning_steps += 1
+                        iter_span.set_attribute("iteration.new_content", True)
+                        iter_span.set_attribute("iteration.reasoning_step", reasoning_steps)
+                    else:
+                        iter_span.set_attribute("iteration.new_content", False)
+            else:
+                time.sleep(2)
+                run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)  # type: ignore
+                
+                old_last_message_id = last_message_id
+                last_message_id = self.fetch_and_display_progress(
+                    self.thread.id, self.agents_client, last_message_id  # type: ignore
+                )
+                
+                if last_message_id != old_last_message_id:
+                    reasoning_steps += 1
+        
+        # Update polling span with final metrics
+        if polling_span:
+            polling_span.set_attribute("polling.total_iterations", polling_iterations)
+            polling_span.set_attribute("polling.reasoning_steps", reasoning_steps)
+            polling_span.set_attribute("polling.final_status", run.status)
         
         # Handle completion or cancellation
+        return self._handle_research_completion(run, citations_count, reasoning_steps, polling_span)
+    
+    def _handle_research_completion(self, run, citations_count, reasoning_steps, parent_span):
+        """Handle research completion with detailed result tracing"""
+        
         if not self.is_processing:
             self.update_reasoning("\n⏹️ Research stopped by user.\n")
-            if span:
-                span.set_attribute("research.cancelled", True)
+            if parent_span:
+                parent_span.set_attribute("research.cancelled_by_user", True)
             return
         
         if run.status == "failed":
             error_msg = f"❌ Research failed: {run.last_error}"
             self.update_reasoning(f"\n{error_msg}\n")
-            if span:
-                span.set_attribute("research.failed", True)
-                span.set_attribute("research.error", str(run.last_error))
+            if parent_span:
+                parent_span.set_attribute("research.failed", True)
+                parent_span.set_attribute("research.error", str(run.last_error))
+                parent_span.set_status(trace.Status(trace.StatusCode.ERROR, str(run.last_error)))
             self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
             return
         
-        # Get final results
-        self.update_reasoning("\n✅ Research completed! Generating final report...\n")
-        final_message = self.agents_client.messages.get_last_message_by_role(  # type: ignore
-            thread_id=self.thread.id, role=MessageRole.AGENT  # type: ignore
-        )
-        
-        if final_message:
-            # Count citations for tracing
-            if final_message.url_citation_annotations:
-                citations_count = len(final_message.url_citation_annotations)
-            
-            if span:
-                span.set_attribute("research.citations_count", citations_count)
-                span.set_attribute("research.completed", True)
-                # Get response length for metrics
-                response_length = sum(len(t.text.value) for t in final_message.text_messages)
-                span.set_attribute("research.response_length", response_length)
-            
-            self.display_final_results(final_message)
+        # Create span for final result processing
+        if parent_span and self.tracer:
+            with self.tracer.start_as_current_span("process_final_results") as results_span:
+                results_span.set_attribute("research.total_reasoning_steps", reasoning_steps)
+                
+                # Get final results
+                self.update_reasoning("\n✅ Research completed! Generating final report...\n")
+                final_message = self.agents_client.messages.get_last_message_by_role(  # type: ignore
+                    thread_id=self.thread.id, role=MessageRole.AGENT  # type: ignore
+                )
+                
+                if final_message:
+                    return self._process_final_message(final_message, results_span, parent_span)
+                else:
+                    results_span.set_attribute("research.no_final_message", True)
+                    parent_span.set_attribute("research.no_results", True)
         else:
-            if span:
-                span.set_attribute("research.no_results", True)
-    
-    def fetch_and_display_progress(self, thread_id, agents_client, last_message_id):
-        """Fetch and display intermediate progress"""
-        try:
-            response = agents_client.messages.get_last_message_by_role(
-                thread_id=thread_id,
-                role=MessageRole.AGENT,
+            # Get final results without tracing
+            self.update_reasoning("\n✅ Research completed! Generating final report...\n")
+            final_message = self.agents_client.messages.get_last_message_by_role(  # type: ignore
+                thread_id=self.thread.id, role=MessageRole.AGENT  # type: ignore
             )
             
-            if not response or response.id == last_message_id:
-                return last_message_id
+            if final_message:
+                return self._process_final_message(final_message, None, None)
+    
+    def _process_final_message(self, final_message, results_span, parent_span):
+        """Process the final message with detailed content analysis"""
+        
+        # Analyze final message content
+        response_length = sum(len(t.text.value) for t in final_message.text_messages)
+        citations_count = len(final_message.url_citation_annotations) if final_message.url_citation_annotations else 0
+        
+        # Extract content analysis
+        content_text = " ".join(t.text.value for t in final_message.text_messages).lower()
+        
+        if results_span:
+            results_span.set_attribute("final_message.response_length", response_length)
+            results_span.set_attribute("final_message.citations_count", citations_count)
+            results_span.set_attribute("final_message.word_count", len(content_text.split()))
             
-            # Check if this is a reasoning message
-            if any(t.text.value.startswith("cot_summary:") for t in response.text_messages):
-                reasoning_text = "\n".join(
-                    t.text.value.replace("cot_summary:", "💭 Reasoning: ") 
-                    for t in response.text_messages
-                )
-                self.update_reasoning(f"{reasoning_text}\n\n")
+            # Analyze content topics
+            self._analyze_final_content(content_text, results_span)
+        
+        if parent_span:
+            parent_span.set_attribute("research.citations_count", citations_count)
+            parent_span.set_attribute("research.completed", True)
+            parent_span.set_attribute("research.response_length", response_length)
+            parent_span.set_attribute("research.success", True)
+        
+        # Display the results
+        self.display_final_results(final_message)
+    
+    def _analyze_final_content(self, content_text, span):
+        """Analyze final content for business intelligence"""
+        try:
+            # Content complexity metrics
+            sentence_count = content_text.count('.') + content_text.count('!') + content_text.count('?')
+            span.set_attribute("content.estimated_sentences", sentence_count)
+            
+            # Topic analysis
+            topics_found = []
+            if "menu" in content_text or "food" in content_text:
+                topics_found.append("menu_planning")
+            if "marketing" in content_text or "promotion" in content_text:
+                topics_found.append("marketing")
+            if "staff" in content_text or "employee" in content_text:
+                topics_found.append("staffing")
+            if "location" in content_text or "neighborhood" in content_text:
+                topics_found.append("location_analysis")
+            if "competitor" in content_text or "competition" in content_text:
+                topics_found.append("competitive_analysis")
+            if "cost" in content_text or "price" in content_text or "budget" in content_text:
+                topics_found.append("financial_planning")
+            if "faq" in content_text:
+                topics_found.append("faq_generation")
+            
+            if topics_found:
+                span.set_attribute("content.topics", ",".join(topics_found))
+                span.set_attribute("content.topic_count", len(topics_found))
+            
+            # Quality indicators
+            if len(content_text) > 2000:
+                span.set_attribute("content.quality", "comprehensive")
+            elif len(content_text) > 1000:
+                span.set_attribute("content.quality", "detailed")
+            elif len(content_text) > 500:
+                span.set_attribute("content.quality", "standard")
+            else:
+                span.set_attribute("content.quality", "brief")
                 
-                # Also display citations if available
-                if response.url_citation_annotations:
-                    citations_text = "🔗 Sources found:\n"
-                    for ann in response.url_citation_annotations[:3]:  # Show first 3
-                        title = ann.url_citation.title or ann.url_citation.url
-                        citations_text += f"  • [{title}]({ann.url_citation.url})\n"
-                    self.update_reasoning(f"{citations_text}\n")
-            
-            return response.id
+        except Exception as e:
+            span.set_attribute("content.analysis_error", str(e))
+    
+    def fetch_and_display_progress(self, thread_id, agents_client, last_message_id):
+        """Fetch and display intermediate progress with tracing"""
+        try:
+            # Create a span for message polling if tracing is enabled
+            if self.tracer:
+                with self.tracer.start_as_current_span("poll_agent_message") as span:
+                    span.set_attribute("thread.id", thread_id)
+                    span.set_attribute("message.last_id", last_message_id or "none")
+                    
+                    response = agents_client.messages.get_last_message_by_role(
+                        thread_id=thread_id,
+                        role=MessageRole.AGENT,
+                    )
+                    
+                    if not response or response.id == last_message_id:
+                        span.set_attribute("message.new_found", False)
+                        return last_message_id
+                    
+                    span.set_attribute("message.new_found", True)
+                    span.set_attribute("message.id", response.id)
+                    
+                    return self._process_agent_response(response, span)
+            else:
+                response = agents_client.messages.get_last_message_by_role(
+                    thread_id=thread_id,
+                    role=MessageRole.AGENT,
+                )
+                
+                if not response or response.id == last_message_id:
+                    return last_message_id
+                
+                return self._process_agent_response(response, None)
             
         except Exception as e:
             self.update_reasoning(f"⚠️ Progress update error: {str(e)}\n")
+            if self.tracer:
+                # Create error span
+                with self.tracer.start_as_current_span("poll_message_error") as error_span:
+                    error_span.set_attribute("error.message", str(e))
+                    error_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
             return last_message_id
     
+    def _process_agent_response(self, response, span=None):
+        """Process agent response with optional tracing"""
+        # Check if this is a reasoning message
+        reasoning_messages = []
+        other_messages = []
+        
+        for t in response.text_messages:
+            if t.text.value.startswith("cot_summary:"):
+                reasoning_messages.append(t.text.value)
+            else:
+                other_messages.append(t.text.value)
+        
+        if reasoning_messages:
+            # This is a reasoning step - create a dedicated span
+            if span and self.tracer:
+                with self.tracer.start_as_current_span("agent_reasoning_step") as reasoning_span:
+                    reasoning_span.set_attribute("reasoning.step_count", len(reasoning_messages))
+                    
+                    reasoning_text = "\n".join(
+                        msg.replace("cot_summary:", "💭 Reasoning: ") 
+                        for msg in reasoning_messages
+                    )
+                    
+                    # Extract key reasoning concepts for better tracing
+                    self._extract_reasoning_attributes(reasoning_text, reasoning_span)
+                    
+                    self.update_reasoning(f"{reasoning_text}\n\n")
+            else:
+                reasoning_text = "\n".join(
+                    msg.replace("cot_summary:", "💭 Reasoning: ") 
+                    for msg in reasoning_messages
+                )
+                self.update_reasoning(f"{reasoning_text}\n\n")
+            
+            # Also display citations if available
+            if response.url_citation_annotations:
+                citations_count = len(response.url_citation_annotations)
+                if span:
+                    span.set_attribute("reasoning.citations_found", citations_count)
+                
+                citations_text = "🔗 Sources found:\n"
+                for ann in response.url_citation_annotations[:3]:  # Show first 3
+                    title = ann.url_citation.title or ann.url_citation.url
+                    citations_text += f"  • [{title}]({ann.url_citation.url})\n"
+                self.update_reasoning(f"{citations_text}\n")
+        
+        # Handle other message types
+        if other_messages:
+            if span:
+                span.set_attribute("message.other_content", True)
+                span.set_attribute("message.other_count", len(other_messages))
+        
+        return response.id
+    
+    def _extract_reasoning_attributes(self, reasoning_text, span):
+        """Extract key attributes from reasoning text for better observability"""
+        try:
+            # Convert to lowercase for analysis
+            text_lower = reasoning_text.lower()
+            
+            # Check for different types of reasoning activities
+            if "search" in text_lower or "searching" in text_lower:
+                span.set_attribute("reasoning.type", "search")
+            elif "analy" in text_lower:  # covers analyze, analysis, etc.
+                span.set_attribute("reasoning.type", "analysis")
+            elif "research" in text_lower:
+                span.set_attribute("reasoning.type", "research")
+            elif "compil" in text_lower or "generat" in text_lower:
+                span.set_attribute("reasoning.type", "compilation")
+            else:
+                span.set_attribute("reasoning.type", "general")
+            
+            # Extract word count for complexity metrics
+            word_count = len(reasoning_text.split())
+            span.set_attribute("reasoning.word_count", word_count)
+            
+            # Check for specific topics or domains
+            if "restaurant" in text_lower or "food" in text_lower:
+                span.set_attribute("reasoning.domain", "restaurant")
+            elif "business" in text_lower or "strategy" in text_lower:
+                span.set_attribute("reasoning.domain", "business")
+            elif "marketing" in text_lower:
+                span.set_attribute("reasoning.domain", "marketing")
+            elif "finance" in text_lower or "cost" in text_lower:
+                span.set_attribute("reasoning.domain", "finance")
+            
+            # Check for geographic references
+            if "san francisco" in text_lower or "fisherman" in text_lower:
+                span.set_attribute("reasoning.location", "san_francisco")
+            
+        except Exception as e:
+            # Don't fail the main operation if attribute extraction fails
+            span.set_attribute("reasoning.extraction_error", str(e))
+    
     def display_final_results(self, message):
-        """Display the final research results"""
+        """Display the final research results with tracing"""
         if not message:
             self.update_report("No final results received.")
             return
         
+        # Create span for final result display if tracing is enabled
+        if self.tracer:
+            with self.tracer.start_as_current_span("display_final_results") as display_span:
+                display_span.set_attribute("result.message_id", message.id)
+                display_span.set_attribute("result.text_messages_count", len(message.text_messages))
+                
+                # Process and display results
+                self._process_and_display_results(message, display_span)
+        else:
+            # Process without tracing
+            self._process_and_display_results(message, None)
+    
+    def _process_and_display_results(self, message, span=None):
+        """Process and display results with optional tracing"""
         # Prepare the research report
         report_content = ""
         
         # Add main content
         text_summary = "\n\n".join([t.text.value.strip() for t in message.text_messages])
+        
+        if span:
+            span.set_attribute("result.original_length", len(text_summary))
+        
         # Convert citations to superscript format
         text_summary = self.convert_citations_to_superscript(text_summary)
         report_content += text_summary
         
         # Add citations section
         if message.url_citation_annotations:
+            citations_count = len(message.url_citation_annotations)
+            if span:
+                span.set_attribute("result.citations_count", citations_count)
+                
             report_content += "\n\n## 📚 Citations\n\n"
             seen_urls = set()
             citation_dict = {}
@@ -755,6 +1101,25 @@ class DeepResearchAgentUI:
             # Add numbered citations
             for num in sorted(citation_dict.keys()):
                 report_content += f"{num}. {citation_dict[num]}\n\n"
+            
+            if span:
+                span.set_attribute("result.unique_sources", len(seen_urls))
+        else:
+            if span:
+                span.set_attribute("result.citations_count", 0)
+        
+        # Final content metrics
+        if span:
+            span.set_attribute("result.final_length", len(report_content))
+            span.set_attribute("result.estimated_words", len(report_content.split()))
+            
+            # Analyze report structure
+            sections = report_content.count('##')
+            if sections > 0:
+                span.set_attribute("result.sections_count", sections)
+                span.set_attribute("result.structured", True)
+            else:
+                span.set_attribute("result.structured", False)
         
         # Update the report display
         self.update_report(report_content)
