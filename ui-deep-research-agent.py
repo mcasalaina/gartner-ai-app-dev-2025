@@ -12,6 +12,9 @@ from azure.ai.agents import AgentsClient
 from azure.ai.agents.models import DeepResearchTool, MessageRole, ThreadMessage
 from tkinter import font
 from datetime import datetime
+from azure.monitor.opentelemetry import configure_azure_monitor
+from opentelemetry import trace
+from opentelemetry.trace import Tracer
 
 # Load environment variables from .env file if they're not already set
 load_dotenv()
@@ -188,11 +191,12 @@ class DeepResearchAgentUI:
         # Initialize variables
         self.is_processing = False
         self.agent = None
-        self.agents_client = None
+        self.agents_client: Optional[AgentsClient] = None
         self.thread = None
         self.current_run = None
-        self.project_client = None
+        self.project_client: Optional[AIProjectClient] = None
         self.agents_client_context = None
+        self.tracer: Optional[Tracer] = None  # OpenTelemetry tracer for custom spans
         
         # Create UI elements
         self.create_widgets()
@@ -219,6 +223,34 @@ class DeepResearchAgentUI:
         style.configure('Clear.TButton',
                        font=('Segoe UI', 10),
                        padding=(15, 8))
+    
+    def initialize_tracing(self):
+        """Initialize Azure AI Foundry tracing with Application Insights"""
+        try:
+            # Configure content recording based on environment variable or default to true for debugging
+            content_recording = os.environ.get("AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", "true").lower()
+            os.environ["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] = content_recording
+            
+            # Get Application Insights connection string from the AI Foundry project
+            connection_string = self.project_client.telemetry.get_connection_string()  # type: ignore
+            
+            if not connection_string:
+                self.update_reasoning("⚠️ Application Insights not enabled. Enable in Azure AI Foundry project -> Tracing.\n")
+                return False
+            
+            # Configure Azure Monitor tracing
+            configure_azure_monitor(connection_string=connection_string)
+            
+            # Create a tracer for custom spans
+            self.tracer = trace.get_tracer(__name__)
+            
+            content_status = "enabled" if content_recording == "true" else "disabled"
+            self.update_reasoning(f"✅ Azure AI Foundry tracing initialized successfully (content recording: {content_status}).\n")
+            return True
+            
+        except Exception as e:
+            self.update_reasoning(f"⚠️ Failed to initialize tracing: {str(e)}\n")
+            return False
     
     def create_widgets(self):
         """Create and layout all UI widgets"""
@@ -387,6 +419,9 @@ class DeepResearchAgentUI:
                 credential=DefaultAzureCredential(),
             )
             
+            # Initialize tracing after project client is created
+            self.initialize_tracing()
+            
             conn_id = self.project_client.connections.get(name=os.environ["BING_RESOURCE_NAME"]).id
             
             # Initialize Deep Research tool
@@ -420,6 +455,19 @@ class DeepResearchAgentUI:
             messagebox.showwarning("Input Required", "Please enter a research query.")
             return
         
+        # Create a span for the UI interaction if tracing is enabled
+        if self.tracer:
+            with self.tracer.start_as_current_span("user_research_request") as ui_span:
+                ui_span.set_attribute("ui.action", "start_research")
+                ui_span.set_attribute("user.input.length", len(user_input))
+                ui_span.set_attribute("user.input.hash", hash(user_input))  # For deduplication analysis
+                
+                self._start_research_internal(user_input)
+        else:
+            self._start_research_internal(user_input)
+    
+    def _start_research_internal(self, user_input):
+        """Internal method to start research process"""
         # Start research in background thread
         self.is_processing = True
         self.show_loading()
@@ -441,6 +489,24 @@ class DeepResearchAgentUI:
     
     def run_research(self, user_input):
         """Run the research process (called in background thread)"""
+        # Create a custom span for the entire research operation
+        scenario = "deep_research_agent_query"
+        
+        if self.tracer:
+            assert self.tracer is not None  # Type guard for Pylance
+            with self.tracer.start_as_current_span(scenario) as span:
+                # Add attributes to the span for better observability
+                span.set_attribute("user.query.length", len(user_input))
+                span.set_attribute("user.query.preview", user_input[:100])  # First 100 chars
+                span.set_attribute("agent.model", os.environ.get("AGENT_MODEL_DEPLOYMENT_NAME", "unknown"))
+                span.set_attribute("deep_research.model", os.environ.get("DEEP_RESEARCH_MODEL_DEPLOYMENT_NAME", "unknown"))
+                
+                return self._run_research_internal(user_input, span)
+        else:
+            return self._run_research_internal(user_input, None)
+    
+    def _run_research_internal(self, user_input, span=None):
+        """Internal research method with optional span for tracing"""
         try:
             # Check if clients are initialized
             if not self.agents_client:
@@ -449,79 +515,157 @@ class DeepResearchAgentUI:
             # Create agent if it doesn't exist
             if not self.agent:
                 self.update_reasoning("🤖 Creating research agent...\n")
-                self.agent = self.agents_client.create_agent(
-                    model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
-                    name="deep-research-agent-ui",
-                    instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
-                    tools=self.deep_research_tool.definitions,
-                )
+                if span:
+                    with self.tracer.start_as_current_span("create_agent") as agent_span:  # type: ignore
+                        agent_span.set_attribute("agent.operation", "create")
+                        self.agent = self.agents_client.create_agent(
+                            model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
+                            name="deep-research-agent-ui",
+                            instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
+                            tools=self.deep_research_tool.definitions,
+                        )
+                        agent_span.set_attribute("agent.id", self.agent.id)
+                else:
+                    self.agent = self.agents_client.create_agent(
+                        model=os.environ["AGENT_MODEL_DEPLOYMENT_NAME"],
+                        name="deep-research-agent-ui",
+                        instructions="You are a TEXT-ONLY research agent. ABSOLUTELY NO IMAGE CONTENT: Do not search for images, do not load images, do not display images, do not reference images, do not describe images, do not suggest image sources, do not research image licensing, do not engage with any visual content whatsoever. Do not mention photo galleries, image databases, visual resources, or any image-related websites. ONLY provide text-based research, written analysis, and textual information. If asked about visual content, explicitly state that you are a text-only agent and cannot assist with image-related requests.",
+                        tools=self.deep_research_tool.definitions,
+                    )
             else:
                 self.update_reasoning("🤖 Reusing existing research agent...\n")
+                if span:
+                    span.set_attribute("agent.operation", "reuse")
+                    span.set_attribute("agent.id", self.agent.id)
             
             # Create thread if it doesn't exist
             if not self.thread:
                 self.update_reasoning("📝 Creating conversation thread...\n")
-                self.thread = self.agents_client.threads.create()
+                if span:
+                    with self.tracer.start_as_current_span("create_thread") as thread_span:  # type: ignore
+                        self.thread = self.agents_client.threads.create()
+                        thread_span.set_attribute("thread.id", self.thread.id)
+                        thread_span.set_attribute("thread.operation", "create")
+                else:
+                    self.thread = self.agents_client.threads.create()
             else:
                 self.update_reasoning("📝 Adding to existing conversation thread...\n")
+                if span:
+                    span.set_attribute("thread.operation", "reuse")
+                    span.set_attribute("thread.id", self.thread.id)
             
             # Create message
             self.update_reasoning("💬 Sending research request...\n")
-            message = self.agents_client.messages.create(
-                thread_id=self.thread.id,
-                role="user",
-                content=user_input,
-            )
+            if span:
+                with self.tracer.start_as_current_span("create_message") as msg_span:  # type: ignore
+                    message = self.agents_client.messages.create(
+                        thread_id=self.thread.id,
+                        role="user",
+                        content=user_input,
+                    )
+                    msg_span.set_attribute("message.id", message.id)
+                    msg_span.set_attribute("message.role", "user")
+            else:
+                message = self.agents_client.messages.create(
+                    thread_id=self.thread.id,
+                    role="user",
+                    content=user_input,
+                )
             
             # Start run
             self.update_reasoning("🔍 Starting research process...\n\n")
-            run = self.agents_client.runs.create(
-                thread_id=self.thread.id, 
-                agent_id=self.agent.id
-            )
+            start_time = time.time()
             
-            self.current_run = run
-            last_message_id = None
-            
-            # Poll for progress
-            while run.status in ("queued", "in_progress") and self.is_processing:
-                time.sleep(2)
-                run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)
-                
-                # Fetch and display intermediate responses
-                last_message_id = self.fetch_and_display_progress(
-                    self.thread.id, self.agents_client, last_message_id
+            if span:
+                with self.tracer.start_as_current_span("execute_research") as research_span:  # type: ignore
+                    run = self.agents_client.runs.create(
+                        thread_id=self.thread.id, 
+                        agent_id=self.agent.id
+                    )
+                    research_span.set_attribute("run.id", run.id)
+                    research_span.set_attribute("research.start_time", start_time)
+                    
+                    result = self._execute_research_run(run, research_span)
+                    
+                    end_time = time.time()
+                    research_span.set_attribute("research.duration_seconds", end_time - start_time)
+                    research_span.set_attribute("research.status", run.status)
+                    
+                    return result
+            else:
+                run = self.agents_client.runs.create(
+                    thread_id=self.thread.id, 
+                    agent_id=self.agent.id
                 )
-            
-            # Handle completion or cancellation
-            if not self.is_processing:
-                self.update_reasoning("\n⏹️ Research stopped by user.\n")
-                return
-            
-            if run.status == "failed":
-                error_msg = f"❌ Research failed: {run.last_error}"
-                self.update_reasoning(f"\n{error_msg}\n")
-                self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
-                return
-            
-            # Get final results
-            self.update_reasoning("\n✅ Research completed! Generating final report...\n")
-            final_message = self.agents_client.messages.get_last_message_by_role(
-                thread_id=self.thread.id, role=MessageRole.AGENT
-            )
-            
-            if final_message:
-                self.display_final_results(final_message)
+                return self._execute_research_run(run, None)
                     
         except Exception as e:
             error_msg = f"❌ Research error: {str(e)}"
             self.update_reasoning(f"\n{error_msg}\n")
+            if span:
+                span.set_attribute("error.message", str(e))
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
             self.root.after(0, lambda: messagebox.showerror("Research Error", error_msg))
         
         finally:
             self.is_processing = False
             self.root.after(0, self.hide_loading)
             self.root.after(0, self.update_button_states)
+    
+    def _execute_research_run(self, run, span=None):
+        """Execute the research run with optional tracing"""
+        self.current_run = run
+        last_message_id = None
+        citations_count = 0
+        
+        # Poll for progress
+        while run.status in ("queued", "in_progress") and self.is_processing:
+            time.sleep(2)
+            run = self.agents_client.runs.get(thread_id=self.thread.id, run_id=run.id)  # type: ignore
+            
+            # Fetch and display intermediate responses
+            last_message_id = self.fetch_and_display_progress(
+                self.thread.id, self.agents_client, last_message_id  # type: ignore
+            )
+        
+        # Handle completion or cancellation
+        if not self.is_processing:
+            self.update_reasoning("\n⏹️ Research stopped by user.\n")
+            if span:
+                span.set_attribute("research.cancelled", True)
+            return
+        
+        if run.status == "failed":
+            error_msg = f"❌ Research failed: {run.last_error}"
+            self.update_reasoning(f"\n{error_msg}\n")
+            if span:
+                span.set_attribute("research.failed", True)
+                span.set_attribute("research.error", str(run.last_error))
+            self.root.after(0, lambda: messagebox.showerror("Research Failed", error_msg))
+            return
+        
+        # Get final results
+        self.update_reasoning("\n✅ Research completed! Generating final report...\n")
+        final_message = self.agents_client.messages.get_last_message_by_role(  # type: ignore
+            thread_id=self.thread.id, role=MessageRole.AGENT  # type: ignore
+        )
+        
+        if final_message:
+            # Count citations for tracing
+            if final_message.url_citation_annotations:
+                citations_count = len(final_message.url_citation_annotations)
+            
+            if span:
+                span.set_attribute("research.citations_count", citations_count)
+                span.set_attribute("research.completed", True)
+                # Get response length for metrics
+                response_length = sum(len(t.text.value) for t in final_message.text_messages)
+                span.set_attribute("research.response_length", response_length)
+            
+            self.display_final_results(final_message)
+        else:
+            if span:
+                span.set_attribute("research.no_results", True)
     
     def fetch_and_display_progress(self, thread_id, agents_client, last_message_id):
         """Fetch and display intermediate progress"""
