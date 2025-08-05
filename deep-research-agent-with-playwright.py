@@ -137,7 +137,7 @@ def create_research_summary(
 
 if __name__ == "__main__":
     project_client = AIProjectClient(
-        endpoint=os.environ["PROJECT_ENDPOINT"],
+        endpoint=os.environ["DEEP_RESEARCH_PROJECT_ENDPOINT"],
         subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
         resource_group_name=os.environ["AZURE_RESOURCE_GROUP_NAME"],
         project_name=os.environ["AZURE_PROJECT_NAME"],

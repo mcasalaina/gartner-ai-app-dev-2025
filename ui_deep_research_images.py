@@ -397,7 +397,7 @@ class DeepResearchAgentUI:
         """Initialize Azure AI clients"""
         try:
             self.project_client = AIProjectClient(
-                endpoint=os.environ["PROJECT_ENDPOINT"],
+                endpoint=os.environ["DEEP_RESEARCH_PROJECT_ENDPOINT"],
                 subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
                 resource_group_name=os.environ["AZURE_RESOURCE_GROUP_NAME"],
                 project_name=os.environ["AZURE_PROJECT_NAME"],
@@ -1231,7 +1231,7 @@ def main():
     """Main entry point for the application"""
     # Check for required environment variables
     required_vars = [
-        "PROJECT_ENDPOINT",
+        "DEEP_RESEARCH_PROJECT_ENDPOINT",
         "AZURE_SUBSCRIPTION_ID", 
         "AZURE_RESOURCE_GROUP_NAME",
         "AZURE_PROJECT_NAME",

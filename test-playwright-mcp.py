@@ -89,7 +89,7 @@ def test_environment_variables():
     print("\nTesting environment variables...")
     
     required_vars = [
-        "PROJECT_ENDPOINT",
+        "DEEP_RESEARCH_PROJECT_ENDPOINT",
         "AZURE_SUBSCRIPTION_ID", 
         "AZURE_RESOURCE_GROUP_NAME",
         "AZURE_PROJECT_NAME",

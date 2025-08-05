@@ -21,7 +21,7 @@ Then edit the `.env` file with your actual configuration. Here's where to find e
 ```plaintext
 # Azure AI Project endpoint URL
 # Get from: Azure AI Foundry Studio > Your Project > Overview > Endpoint
-PROJECT_ENDPOINT=https://your-project-endpoint.services.ai.azure.com/api/projects/your-project-name
+DEEP_RESEARCH_PROJECT_ENDPOINT=https://your-project-endpoint.services.ai.azure.com/api/projects/your-project-name
 
 # Azure subscription information
 # Get from: Azure Portal > Subscriptions

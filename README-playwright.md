@@ -65,7 +65,7 @@ npm install -g @playwright/mcp@latest
 Copy `.env.template` to `.env` and fill in your Azure configuration:
 
 ```env
-PROJECT_ENDPOINT=https://your-project.cognitiveservices.azure.com/
+DEEP_RESEARCH_PROJECT_ENDPOINT=https://your-project.cognitiveservices.azure.com/
 AZURE_SUBSCRIPTION_ID=your-subscription-id
 AZURE_RESOURCE_GROUP_NAME=your-resource-group
 AZURE_PROJECT_NAME=your-project-name
