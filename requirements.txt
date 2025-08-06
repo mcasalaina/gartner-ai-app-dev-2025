@@ -1,7 +1,9 @@
 # Core Azure AI and OpenAI packages
 azure-ai-projects>=1.0.0b12
 azure-ai-agents>=1.1.0b4  # Pre-release version needed for DeepResearchTool
+azure-ai-evaluation
 azure-identity>=1.23.1
+azure-search-documents>=11.4.0
 python-dotenv>=1.1.1
 openai>=1.0.0
 
