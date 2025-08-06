@@ -37,7 +37,10 @@ reportlab>=4.0.0
 # Azure AI Foundry tracing and monitoring
 azure-monitor-opentelemetry>=1.2.0
 opentelemetry-sdk>=1.21.0
-opentelemetry-instrumentation-openai-v2>=0.1.0
+opentelemetry-instrumentation-openai-v2
+
+# Azure AI Evaluation
+azure-ai-evaluation>=1.10.0
 
 # For Playwright MCP integration (MCP tool support should be in azure-ai-agents)
 # Note: Playwright MCP server runs as separate Node.js process
