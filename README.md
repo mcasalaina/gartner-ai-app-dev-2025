@@ -110,3 +110,71 @@ Traces will appear in your Azure AI Foundry project under the "Tracing" section,
     ```
 
 You're all set to start using the application!
+
+## Local Restaurant Assistant
+
+This repository includes a local restaurant assistant (`local_restaurant_assistant.py`) that uses Microsoft's Foundry Local to run AI models directly on your device, providing privacy and offline capabilities.
+
+### Prerequisites for Local Assistant
+
+To use the local restaurant assistant, you need to have **Microsoft Foundry Local** installed on your system.
+
+#### System Requirements
+
+- **Operating System**: Windows 10 (x64), Windows 11 (x64/ARM), Windows Server 2025, or macOS
+- **Hardware**: Minimum 8GB RAM, 3GB free disk space (Recommended: 16GB RAM, 15GB free disk space)
+- **Network**: Internet connection for initial model download (optional for offline use afterward)
+- **Acceleration (optional)**: NVIDIA GPU (2,000 series or newer), AMD GPU (6,000 series or newer), Intel iGPU, Qualcomm Snapdragon X Elite (8GB+ memory), or Apple silicon
+- **Permissions**: Administrative privileges to install software
+
+#### Install Foundry Local
+
+**For Windows:**
+
+```bash
+winget install Microsoft.FoundryLocal
+```
+
+**For macOS:**
+
+```bash
+brew tap microsoft/foundrylocal
+brew install foundrylocal
+```
+
+**Alternative Installation:**
+You can also download the installer directly from the [Foundry Local GitHub repository](https://aka.ms/foundry-local-installer).
+
+#### Verify Installation
+
+After installation, verify that Foundry Local is working by running:
+
+```bash
+foundry --version
+```
+
+You can also test with a simple model:
+
+```bash
+foundry model run phi-4-mini
+```
+
+#### Using the Local Restaurant Assistant
+
+Once Foundry Local is installed, you can run the local restaurant assistant:
+
+```bash
+python local_restaurant_assistant.py
+```
+
+The assistant will:
+
+1. Automatically start the Foundry Local service if not running
+2. Load the Phi-4-mini-instruct model optimized for your hardware
+3. Load restaurant information from `local_assistant_info.md`
+4. Prompt you to ask questions about Scheibmeir's Steaks, Snacks, and Sticks
+5. Provide responses using the local AI model with restaurant context
+
+**Note:** The first run may take several minutes as the model needs to be downloaded. Subsequent runs will be much faster as the model is cached locally.
+
+For more information about Foundry Local, visit the [official documentation](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/get-started).
