@@ -42,6 +42,5 @@ opentelemetry-instrumentation-openai-v2
 # Azure AI Evaluation
 azure-ai-evaluation>=1.10.0
 
-# For Playwright MCP integration (MCP tool support should be in azure-ai-agents)
-# Note: Playwright MCP server runs as separate Node.js process
-# No additional Python packages needed for MCP client functionality
+#Foundry Local
+foundry-local-sdk
