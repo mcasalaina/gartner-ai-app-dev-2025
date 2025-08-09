@@ -1,0 +1,8 @@
+Make a JSONL file for the purpose of fine tuning a GPT-4o mini model that contains prompts and completions regarding the restaurant Scheibmeir's Steaks, Snacks, and Sticks. Also make some prompts asking for information about other restaurants, and about things having nothing to do with restaurants, where the completions refuse to talk about anything other than an Scheibmeir's. Make 250 prompts.
+
+Each line should be of this format:
+
+{"messages": [{"role": "assistant", "content": "What are Scheibmeir's Hours on Wednesday?"}, {"role": "user", "content": "Scheibmeir's is open from 4PM to 10PM on Wednesday."}]}
+
+All the information about Scheibmeir's is below:
+
