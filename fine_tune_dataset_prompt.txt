@@ -1,4 +1,4 @@
-Make a JSONL file for the purpose of fine tuning a GPT-4o mini model that contains prompts and completions regarding the restaurant Scheibmeir's Steaks, Snacks, and Sticks. Also make some prompts asking for information about other restaurants, and about things having nothing to do with restaurants, where the completions refuse to talk about anything other than an Scheibmeir's. Make 250 prompts.
+Make a JSONL file for the purpose of fine tuning a GPT-4o-nano model that contains prompts and completions regarding the fictional restaurant Scheibmeir's Steaks, Snacks, and Sticks. Also make some prompts asking for information about other restaurants, and about things having nothing to do with restaurants, where the completions refuse to talk about anything other than an Scheibmeir's. Make 250 prompts. Give me that JSONL file to download.
 
 Each line should be of this format:
 
@@ -6,3 +6,81 @@ Each line should be of this format:
 
 All the information about Scheibmeir's is below:
 
+# Scheibmeir's Steaks, Snacks & Sticks
+
+## Our Story
+
+Founded in the vibrant city of Fort Collins, Colorado in 1996, Scheibmeir's Steaks, Snacks & Sticks began its journey with a single mission: to serve exquisite cuisine that blends innovation with tradition. At the helm of this culinary adventure was the genius chef Jim Scheibmeir, whose passion for reimagining classic dishes set a new standard in the restaurant industry.
+
+The restaurant quickly became a local favorite, known for its mouth-watering steaks and creative appetizers. Word of Jim's culinary prowess spread beyond Fort Collins, attracting food enthusiasts and epicureans from all corners of the country.
+
+In 2005, fueled by its growing popularity, Scheibmeir's began its ambitious expansion beyond Fort Collins. The first step was opening a second location in Denver, Colorado, bringing the renowned culinary experience to the state's capital city. The Denver location quickly became a cornerstone of the city's dining scene, establishing Scheibmeir's as a regional powerhouse.
+
+Building on this success, the restaurant continued its westward expansion with outposts in Las Vegas, Nevada, and Phoenix, Arizona. Each location brought Chef Jim's innovative approach to new audiences, adapting to local tastes while maintaining the signature quality that made Scheibmeir's famous.
+
+In 2025, Scheibmeir's reached a major milestone by opening its first restaurant in San Francisco, California, at the historic 340 Jefferson St. This newest location represents the culmination of nearly three decades of culinary excellence and strategic growth, bringing the beloved Scheibmeir's experience to the vibrant San Francisco dining scene.
+
+At the heart of Scheibmeir's philosophy is a dedication to quality and innovation. Each meal is crafted with precision, offering guests a culinary experience that celebrates both the familiar and the unexpected. A blend of seasoned expertise and a relentless drive for perfection reinforces Scheibmeir's reputation as a culinary icon.
+
+Today, Scheibmeir's Steaks, Snacks & Sticks stands as a testament to creativity and excellence, inviting guests to savor moments of joy and indulgence. Under the leadership of Chef Scheibmeir, the restaurant continues to push the boundaries of modern cuisine, ensuring that every visit is as memorable as the last.
+
+*This restaurant is fictional and this information is only being used for a demonstration.*
+
+---
+
+## Menu
+
+**Scheibmeir's Steaks, Snacks and Sticks**  
+*Located at 340 Jefferson St., San Francisco*
+
+### Steaks
+- **Classic Filet Mignon** - Tender and juicy filet, served with garlic mashed potatoes and asparagus. $39
+- **New York Strip** - Perfectly seared strip steak with herb butter, paired with sautéed spinach and roasted fingerling potatoes. $36
+- **Ribeye Steak** - A richly marbled cut served with grilled zucchini and parmesan truffle fries. $42
+
+### American-Style Appetizers
+- **Cheesy Garlic Bread** - Freshly baked bread slathered in garlic butter and topped with melted mozzarella. $8
+- **Loaded Nachos** - Tortilla chips piled high with melted cheddar, jalapeños, sour cream, and guacamole. $12
+- **Buffalo Wings** - Crispy chicken wings tossed in tangy buffalo sauce, served with blue cheese dip. $14
+
+### Chinese-Inspired Dishes
+- **Kung Pao Chicken Skewers** - Spicy chicken skewers with peanuts and bell peppers. $18
+- **Sweet and Sour Pork** - Crispy pork bites in a tangy glaze, served with pineapple and green peppers. $19
+- **Beef Chow Fun** - Stir-fried rice noodles with succulent beef slices and bean sprouts. $21
+
+### Fancy Jello Salads
+- **Strawberry Pretzel Salad** - Layers of crispy pretzel crust, cream cheese filling, and strawberry Jello topping. $9
+- **Ambrosia Salad** - A blend of whipped cream, marshmallows, mandarin oranges, pineapple, and coconut. $8
+- **Rainbow Gelatin Salad** - Multi-colored layers of Jello served on a bed of fresh mixed greens. $7
+
+---
+
+## Hours & Contact
+
+### Regular Hours
+*Located at 340 Jefferson St., San Francisco*
+
+| Day | Hours |
+|-----|-------|
+| Monday | 4:00 PM - 10:00 PM |
+| Tuesday | 4:00 PM - 10:00 PM |
+| Wednesday | 4:00 PM - 10:00 PM |
+| Thursday | 4:00 PM - 10:00 PM |
+| Friday | 4:00 PM - 11:00 PM |
+| Saturday | 12:00 PM - 11:00 PM |
+| Sunday | 12:00 PM - 9:00 PM |
+
+### Special Hours & Notes
+- **Happy Hour:** Monday - Friday, 4:00 PM - 6:00 PM
+- **Late Night Menu:** Friday & Saturday after 9:00 PM
+- **Brunch:** Saturday & Sunday, 12:00 PM - 3:00 PM
+- **Holiday Hours:** Please call ahead for holiday scheduling
+- **Last Seating:** 30 minutes before closing time
+
+### Contact Information
+- **Address:** 340 Jefferson St., San Francisco, CA
+- **Phone:** (415) 555-STEAK
+- **Email:** info@scheibmeirs.com
+- **Reservations:** Recommended for parties of 4 or more
+
+---

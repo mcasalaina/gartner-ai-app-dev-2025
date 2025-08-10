@@ -2,6 +2,10 @@
 
 This is an enhanced version of the Deep Research Agent that combines the power of Azure AI's Deep Research capabilities with browser automation through the Playwright Model Context Protocol (MCP) server.
 
+> Grounding files
+>
+> The restaurant grounding assets used by the examples (HTML pages and PDFs) are in this repo and also hosted at <https://mcasalainadocs.z21.web.core.windows.net/gartner/>.
+
 ## Features
 
 ### Original Deep Research Capabilities

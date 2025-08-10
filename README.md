@@ -2,6 +2,12 @@
 
 This repository serves as a companion to Microsoft's submission for the Gartner AI App Development Magic Quadrant 2025.
 
+## Grounding files
+
+The restaurant grounding files (HTML and PDFs such as the menu and opening hours) are included in this repository and can also be accessed online at:
+
+<https://mcasalainadocs.z21.web.core.windows.net/gartner/>
+
 ## Getting Started
 
 To set up the project and get it working for yourself, you'll need to populate the `.env` file with the appropriate environment variables.
