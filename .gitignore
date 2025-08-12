@@ -155,3 +155,7 @@ images/
 
 # HTML output directory
 html/
+advanced_red_team_results.json
+basic_red_team_results.json
+redteam.log
+redteam.log
